@@ -197,7 +197,8 @@ fun PhantmAppContainer(
                 Screen.AddContact -> {
                     AddContactScreen(
                         viewModel = viewModel,
-                        onBack = { currentScreen = Screen.Dashboard }
+                        onBack = { currentScreen = Screen.Dashboard },
+                        onContactLinked = { id -> currentScreen = Screen.ChatDetail(id) }
                     )
                 }
             }
