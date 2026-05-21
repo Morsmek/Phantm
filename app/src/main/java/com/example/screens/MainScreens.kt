@@ -81,6 +81,7 @@ fun ChatsListScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Screen Header Layout
@@ -101,7 +102,7 @@ fun ChatsListScreen(
                     letterSpacing = 2.sp
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                ShimmerBadge()
+                E2eeBadge()
             }
 
             // Cyber search bar
@@ -123,8 +124,10 @@ fun ChatsListScreen(
                     focusedBorderColor = CyberCyan,
                     unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard
+                    unfocusedContainerColor = CyberCard,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -444,10 +447,13 @@ fun ChatDetailScreen(
         }
     }
 
+    var showMoreMenu by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
     ) {
         // Chat Header View block
         Row(
@@ -496,19 +502,75 @@ fun ChatDetailScreen(
                         )
                     }
                 }
-                Text(
-                    text = PhantmCrypto.truncateKey(contactId),
-                    color = CyberTextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = MonospaceFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = CyberCyan,
+                        modifier = Modifier.size(10.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "encrypted • online",
+                        color = CyberCyan,
+                        fontSize = 11.sp,
+                        fontFamily = MonospaceFontFamily
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            ShimmerBadge()
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More Options",
+                        tint = CyberCyan
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false },
+                    modifier = Modifier
+                        .background(CyberSurface)
+                        .border(1.dp, CyberBorder)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "COPY PEER KEY",
+                                color = CyberTextPrimary,
+                                fontFamily = MonospaceFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cb.setPrimaryClip(ClipData.newPlainText("Peer ID", contactId))
+                            viewModel.showToast("Copied peer key", "success")
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "PURGE CHAT HISTORY",
+                                color = CyberRed,
+                                fontFamily = MonospaceFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            viewModel.removeContact(contactId)
+                            onBack()
+                        }
+                    )
+                }
+            }
         }
 
         // messages scrolling canvas
@@ -560,11 +622,13 @@ fun ChatDetailScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedBorderColor = CyberCyan.copy(alpha = 0.5f),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.05f),
+                    focusedBorderColor = CyberCyan,
+                    unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberSurface,
-                    unfocusedContainerColor = CyberSurface
+                    unfocusedContainerColor = CyberSurface,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(24.dp),
                 maxLines = 3,
                 modifier = Modifier
@@ -670,6 +734,7 @@ fun ContactsListScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
@@ -762,8 +827,10 @@ fun ContactsListScreen(
                     focusedBorderColor = CyberCyan,
                     unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard
+                    unfocusedContainerColor = CyberCard,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -937,6 +1004,7 @@ fun AddContactScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp)
     ) {
         // Simple back action header
@@ -1028,8 +1096,10 @@ fun AddContactScreen(
                     focusedBorderColor = CyberCyan,
                     unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard
+                    unfocusedContainerColor = CyberCard,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 textStyle = TextStyle(fontFamily = MonospaceFontFamily),
                 modifier = Modifier
@@ -1057,8 +1127,10 @@ fun AddContactScreen(
                     focusedBorderColor = CyberCyan,
                     unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard
+                    unfocusedContainerColor = CyberCard,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1085,8 +1157,10 @@ fun AddContactScreen(
                     focusedBorderColor = CyberCyan,
                     unfocusedBorderColor = CyberBorder,
                     focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard
+                    unfocusedContainerColor = CyberCard,
+                    cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 visualTransformation = if (showPassphrase) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -1118,6 +1192,7 @@ fun AddContactScreen(
                     disabledContainerColor = CyberCyan.copy(alpha = 0.2f),
                     disabledContentColor = CyberTextSecondary.copy(alpha = 0.3f)
                 ),
+                shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -1138,9 +1213,34 @@ fun AddContactScreen(
                     .height(300.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(CyberSurface)
-                    .border(2.dp, CyberCyan, RoundedCornerShape(16.dp)),
+                    .border(1.dp, CyberBorder, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
+                // VISOR Corner Brackets drawn programmatically via Canvas
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+                    val lineLength = 24.dp.toPx()
+                    val strokeW = 3.dp.toPx()
+                    val margin = 16.dp.toPx()
+
+                    // Top Left
+                    drawLine(CyberCyan, Offset(margin, margin), Offset(margin + lineLength, margin), strokeW)
+                    drawLine(CyberCyan, Offset(margin, margin), Offset(margin, margin + lineLength), strokeW)
+
+                    // Top Right
+                    drawLine(CyberCyan, Offset(w - margin, margin), Offset(w - margin - lineLength, margin), strokeW)
+                    drawLine(CyberCyan, Offset(w - margin, margin), Offset(w - margin, margin + lineLength), strokeW)
+
+                    // Bottom Left
+                    drawLine(CyberCyan, Offset(margin, h - margin), Offset(margin + lineLength, h - margin), strokeW)
+                    drawLine(CyberCyan, Offset(margin, h - margin), Offset(margin, h - margin - lineLength), strokeW)
+
+                    // Bottom Right
+                    drawLine(CyberCyan, Offset(w - margin, h - margin), Offset(w - margin - lineLength, h - margin), strokeW)
+                    drawLine(CyberCyan, Offset(w - margin, h - margin), Offset(w - margin, h - margin - lineLength), strokeW)
+                }
+
                 // Viewfinder framing visual with animated scanner sweep
                 val infiniteTransition = rememberInfiniteTransition(label = "scanner")
                 val scannerY by infiniteTransition.animateFloat(
@@ -1206,9 +1306,10 @@ fun AddContactScreen(
                     onBack()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                shape = RoundedCornerShape(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("SCAN SIMULATION KEY", fontFamily = MonospaceFontFamily)
+                Text("SCAN SIMULATION KEY", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(modifier = Modifier.height(20.dp))
@@ -1252,10 +1353,13 @@ fun ProfileScreen(
         }
     }
 
+    var activeProfileTab by remember { mutableStateOf(1) } // Default to CHANNELS (tab 1)
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp)
     ) {
         Column(
@@ -1272,7 +1376,7 @@ fun ProfileScreen(
                 PhantmLogoIcon(modifier = Modifier.size(28.dp))
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "CHANNELS ARCHIVE",
+                    text = "IDENTITY CENTER",
                     color = CyberTextPrimary,
                     fontSize = 21.sp,
                     fontFamily = MonospaceFontFamily,
@@ -1281,148 +1385,395 @@ fun ProfileScreen(
                 )
             }
 
-            // Shield Visual Pulse
-            DataPulse(modifier = Modifier.size(96.dp))
+            // Top Segmented Tabs
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(CyberSurface)
+                    .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                    .padding(4.dp)
+            ) {
+                val tabs = listOf("token", "CHANNELS", "ARCHIVE")
+                tabs.forEachIndexed { index, title ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (activeProfileTab == index) CyberCyan else Color.Transparent)
+                            .clickable { activeProfileTab = index }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title.uppercase(),
+                            color = if (activeProfileTab == index) CyberBlack else CyberTextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             identity?.let { self ->
-                if (isEditingName) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = editingNameValue,
-                            onValueChange = { editingNameValue = it },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = CyberCyan,
-                                unfocusedBorderColor = CyberBorder
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = {
-                            viewModel.setDisplayName(editingNameValue)
-                            isEditingName = false
-                        }) {
-                            Icon(Icons.Default.Check, contentDescription = "Confirm", tint = CyberCyan)
-                        }
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        GlitchText(text = self.displayName)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = {
-                            editingNameValue = self.displayName
-                            isEditingName = true
-                        }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit alias", tint = CyberCyan, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Phantm ID block
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(CyberSurface)
-                        .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
-                        .clickable {
-                            self.publicKey?.let { pk ->
-                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cb.setPrimaryClip(ClipData.newPlainText("Phantm ID", pk))
-                                viewModel.showToast("Phantm ID copied", "success")
-                            }
-                        }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "ID: " + (self.publicKey?.let { PhantmCrypto.truncateKey(it, 8) } ?: "N/A"),
-                        color = CyberCyan,
-                        fontSize = 11.sp,
-                        fontFamily = MonospaceFontFamily,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(12.dp))
-                }
-
-                Spacer(modifier = Modifier.height(48.dp))
-
-                // Verification block / Display Recovery Seed Phrase
-                if (isVerified) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CyberCard)
-                            .border(1.dp, CyberRed, RoundedCornerShape(12.dp))
-                            .padding(16.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = CyberRed, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "SCREEN SECURED (FLAG_SECURE ON)",
-                                color = CyberRed,
-                                fontSize = 11.sp,
-                                fontFamily = MonospaceFontFamily,
-                                fontWeight = FontWeight.Bold
+                when (activeProfileTab) {
+                    0 -> { // Tab 0: token (Identity / QR Code / Public Key)
+                        // Central lock icon inside glowing avatar
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(CircleShape)
+                                .background(CyberSurface)
+                                .border(2.dp, CyberCyan, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .border(4.dp, CyberCyan.copy(alpha = 0.2f), CircleShape)
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Seed Words chips grid
-                        self.mnemonic?.let { phrase ->
-                            val words = phrase.split(" ")
-                            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.height(140.dp)
-                            ) {
-                                items(words.size) { index ->
-                                    WordChip(number = index + 1, word = words[index])
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Identity secured",
+                                tint = CyberCyan,
+                                modifier = Modifier.size(44.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Button(
-                            onClick = { viewModel.lockBio() },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyberBorder, contentColor = Color.White),
-                            modifier = Modifier.fillMaxWidth()
+                        if (isEditingName) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = editingNameValue,
+                                    onValueChange = { editingNameValue = it },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = CyberCyan,
+                                        unfocusedBorderColor = CyberBorder,
+                                        cursorColor = CyberCyan
+                                    ),
+                                    prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(onClick = {
+                                    viewModel.setDisplayName(editingNameValue)
+                                    isEditingName = false
+                                }) {
+                                    Icon(Icons.Default.Check, contentDescription = "Confirm", tint = CyberCyan)
+                                }
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                GlitchText(text = self.displayName)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(onClick = {
+                                    editingNameValue = self.displayName
+                                    isEditingName = true
+                                }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit alias", tint = CyberCyan, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Phantm ID block
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CyberSurface)
+                                .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    self.publicKey?.let { pk ->
+                                        val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        cb.setPrimaryClip(ClipData.newPlainText("Phantm ID", pk))
+                                        viewModel.showToast("Phantm ID copied", "success")
+                                    }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("HIDE PRIVATE KEY", fontFamily = MonospaceFontFamily)
+                            Text(
+                                text = "ID: " + (self.publicKey?.let { PhantmCrypto.truncateKey(it, 8) } ?: "N/A"),
+                                color = CyberCyan,
+                                fontSize = 11.sp,
+                                fontFamily = MonospaceFontFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(12.dp))
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = "SECURE PROTOCOL TOKEN",
+                            color = CyberCyan,
+                            fontSize = 11.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        // Deterministic QR Code representation based on user public key
+                        val pk = self.publicKey ?: ""
+                        val qrGridSize = 21 // Version 1 QR is 21x21
+                        androidx.compose.foundation.Canvas(
+                            modifier = Modifier
+                                .size(140.dp)
+                                .background(Color.White)
+                                .border(1.dp, CyberCyan)
+                                .padding(6.dp)
+                        ) {
+                            val blockSize = size.width / qrGridSize
+                            val bytes = pk.toByteArray()
+                            var byteIndex = 0
+                            var bitIndex = 0
+                            for (row in 0 until qrGridSize) {
+                                for (col in 0 until qrGridSize) {
+                                    val isFinder = (row < 7 && col < 7) || (row < 7 && col >= qrGridSize - 7) || (row >= qrGridSize - 7 && col < 7)
+                                    val isFilled = if (isFinder) {
+                                        val r = if (row >= qrGridSize - 7) row - (qrGridSize - 7) else row
+                                        val c = if (col >= qrGridSize - 7) col - (qrGridSize - 7) else col
+                                        (r == 0 || r == 6 || c == 0 || c == 6) || (r in 2..4 && c in 2..4)
+                                    } else {
+                                        if (bytes.isNotEmpty()) {
+                                            val byte = bytes[byteIndex % bytes.size].toInt()
+                                            val bit = (byte shr bitIndex) and 1
+                                            bitIndex++
+                                            if (bitIndex >= 8) {
+                                                bitIndex = 0
+                                                byteIndex++
+                                            }
+                                            bit == 1
+                                        } else {
+                                            (row + col) % 2 == 0
+                                        }
+                                    }
+                                    if (isFilled) {
+                                        drawRect(
+                                            color = Color.Black,
+                                            topLeft = Offset(col * blockSize, row * blockSize),
+                                            size = androidx.compose.ui.geometry.Size(blockSize, blockSize)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                } else {
-                    Button(
-                        onClick = { showPinDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                    ) {
-                        Text("VIEW RECOVERY SEED", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                    1 -> { // Tab 1: CHANNELS (Recovery credentials / Private keys)
+                        if (isVerified) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ) {
+                                // Updated red warning box layout
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CyberSurface)
+                                        .border(1.dp, CyberRed, RoundedCornerShape(8.dp))
+                                        .padding(16.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = CyberRed,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = "SCREEN SECURED - FLAG_SECURE ON",
+                                            color = CyberRed,
+                                            fontSize = 11.sp,
+                                            fontFamily = MonospaceFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "System is running under screenshot prevention flag. Never share your recovery seed phrase with anyone.",
+                                        color = CyberTextSecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                // Word chips grid with cyan index numbers and greyed background words
+                                self.mnemonic?.let { phrase ->
+                                    val words = phrase.split(" ")
+                                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.height(150.dp)
+                                    ) {
+                                        items(words.size) { index ->
+                                            WordChip(number = index + 1, word = words[index])
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                Button(
+                                    onClick = { viewModel.lockBio() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberBorder, contentColor = Color.White),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                ) {
+                                    Text("HIDE PRIVATE KEY", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            // Recovery Seed Archive locked card
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyberSurface)
+                                    .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = CyberCyan.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "RECOVERY SEED ARCHIVE LOCKED",
+                                        color = CyberTextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = MonospaceFontFamily
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Authentication required to expose recovery credentials.",
+                                        color = CyberTextSecondary,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Button(
+                                        onClick = { showPinDialog = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                    ) {
+                                        Text("VIEW RECOVERY SEED", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Text(
-                        text = "Requires biometric or security PIN unlock",
-                        color = CyberTextSecondary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+                    2 -> { // Tab 2: ARCHIVE (Node diagnostics & memory logs)
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "NODE DIAGNOSTICS",
+                                color = CyberCyan,
+                                fontSize = 11.sp,
+                                fontFamily = MonospaceFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+
+                            // Card 1: Connection Status
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(CyberGreen)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("TUNNEL BROADCASTER", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = MonospaceFontFamily)
+                                        Text("Network Broker Status: ONLINE", color = CyberTextSecondary, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+
+                            // Card 2: Memory Encryption
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("ENTROPY SHIELD", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = MonospaceFontFamily)
+                                        Text("SQLite database ciphertext status: ACTIVE", color = CyberTextSecondary, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+
+                            // Card 3: Cryptographic Specs
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Info, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("CIPHER SPECIFICATION", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = MonospaceFontFamily)
+                                        Text("Curve25519 / BIP39 compliant", color = CyberTextSecondary, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1462,8 +1813,10 @@ fun ProfileScreen(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
                                 focusedBorderColor = CyberCyan,
-                                unfocusedBorderColor = CyberBorder
+                                unfocusedBorderColor = CyberBorder,
+                                cursorColor = CyberCyan
                             ),
+                            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                             label = { Text("Enter 4-digit PIN", color = CyberCyan) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             visualTransformation = PasswordVisualTransformation(),

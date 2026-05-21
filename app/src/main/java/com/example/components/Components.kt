@@ -80,47 +80,81 @@ fun WordChip(
     }
 }
 
+fun Modifier.drawDotGrid(
+    dotColor: Color = CyberDotColor,
+    gridSize: Dp = 16.dp,
+    dotRadius: Dp = 1.dp
+) = drawBehind {
+    val sizePx = gridSize.toPx()
+    val radiusPx = dotRadius.toPx()
+    val width = size.width
+    val height = size.height
+
+    var x = 0f
+    while (x < width) {
+        var y = 0f
+        while (y < height) {
+            drawCircle(
+                color = dotColor,
+                radius = radiusPx,
+                center = Offset(x, y)
+            )
+            y += sizePx
+        }
+        x += sizePx
+    }
+}
+
+@Composable
+fun E2eeBadge(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .border(1.dp, CyberCyan, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = "E2EE ON",
+            color = CyberCyan,
+            fontSize = 10.sp,
+            fontFamily = MonospaceFontFamily,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
 @Composable
 fun Avatar(
     name: String,
     size: Dp = 40.dp,
     modifier: Modifier = Modifier
 ) {
-    val hash = name.hashCode().absoluteValue
-    val hue1 = (hash % 360).toFloat()
-    val hue2 = (hue1 + 45f) % 360f
-
-    val isSignature = name == "K" || name.contains("Kael", ignoreCase = true) || name.contains("Identity", ignoreCase = true)
-
-    val gradientBrush = remember(name) {
-        if (isSignature) {
-            Brush.linearGradient(
-                colors = listOf(CyberCyan, CyberCyanDark)
-            )
+    val initials = if (name.isNotBlank()) {
+        val parts = name.trim().split("\\s+".toRegex())
+        if (parts.size >= 2) {
+            parts[0].take(1).uppercase() + parts[1].take(1).uppercase()
         } else {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color.hsl(hue1, 0.75f, 0.5f),
-                    Color.hsl(hue2, 0.70f, 0.35f)
-                )
-            )
+            name.take(2).uppercase()
         }
+    } else {
+        "?"
     }
 
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(gradientBrush)
-            .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape),
+            .background(CyberSurface)
+            .border(1.dp, CyberCyan.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        val initials = if (name.isNotBlank()) name.take(1).uppercase() else "?"
         Text(
             text = initials,
-            color = if (isSignature) CyberBlack else Color.White,
+            color = Color.White,
             fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.45f).sp
+            fontSize = (size.value * 0.38f).sp,
+            fontFamily = MonospaceFontFamily
         )
     }
 }
@@ -583,146 +617,21 @@ fun PhantmBottomSheet(
 fun PhantmLogoIcon(
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        
-        val scaleX = width / 100f
-        val scaleY = height / 100f
-
-        val whitePath = androidx.compose.ui.graphics.Path().apply {
-            // Main backbone & loop
-            moveTo(38f * scaleX, 28f * scaleY)
-            cubicTo(
-                45f * scaleX, 22f * scaleY,
-                68f * scaleX, 20f * scaleY,
-                72f * scaleX, 40f * scaleY
-            )
-            cubicTo(
-                75f * scaleX, 55f * scaleY,
-                58f * scaleX, 62f * scaleY,
-                38f * scaleX, 62f * scaleY
-            )
-            
-            // Ear lock pointing down-left
-            moveTo(38f * scaleX, 28f * scaleY)
-            cubicTo(
-                32f * scaleX, 30f * scaleY,
-                27f * scaleX, 40f * scaleY,
-                31f * scaleX, 46f * scaleY
-            )
-            
-            // Bottom hook / backbone tail
-            moveTo(38f * scaleX, 80f * scaleY)
-            cubicTo(
-                44f * scaleX, 79f * scaleY,
-                48f * scaleX, 74f * scaleY,
-                48f * scaleX, 74f * scaleY
-            )
-            
-            // Main vertical backbone line
-            moveTo(38f * scaleX, 51f * scaleY)
-            lineTo(38f * scaleX, 80f * scaleY)
-        }
-
-        val pinkPath = androidx.compose.ui.graphics.Path().apply {
-            // Shadow loop offset slightly to the right/down for 3D glow effect
-            moveTo(39f * scaleX, 29f * scaleY)
-            cubicTo(
-                46f * scaleX, 23f * scaleY,
-                69f * scaleX, 21f * scaleY,
-                73f * scaleX, 41f * scaleY
-            )
-            cubicTo(
-                76f * scaleX, 56f * scaleY,
-                59f * scaleX, 63f * scaleY,
-                39f * scaleX, 63f * scaleY
-            )
-            
-            moveTo(39f * scaleX, 29f * scaleY)
-            cubicTo(
-                33f * scaleX, 31f * scaleY,
-                28f * scaleX, 41f * scaleY,
-                32f * scaleX, 47f * scaleY
-            )
-            
-            moveTo(39f * scaleX, 81f * scaleY)
-            cubicTo(
-                45f * scaleX, 80f * scaleY,
-                49f * scaleX, 75f * scaleY,
-                49f * scaleX, 75f * scaleY
-            )
-            
-            moveTo(39f * scaleX, 52f * scaleY)
-            lineTo(39f * scaleX, 81f * scaleY)
-        }
-
-        val eyePath = androidx.compose.ui.graphics.Path().apply {
-            moveTo(52f * scaleX, 38f * scaleY)
-            cubicTo(
-                56f * scaleX, 38f * scaleY,
-                64f * scaleX, 43f * scaleY,
-                64f * scaleX, 47f * scaleY
-            )
-            cubicTo(
-                60f * scaleX, 47f * scaleY,
-                52f * scaleX, 43f * scaleY,
-                52f * scaleX, 38f * scaleY
-            )
-            close()
-        }
-
-        // 1. Draw 3D pink shadow glow
-        drawPath(
-            path = pinkPath,
-            color = Color(0xFFFE1880),
-            style = Stroke(width = 4.5f * scaleX, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
-        )
-
-        // 2. Draw front sharp white lines
-        drawPath(
-            path = whitePath,
-            color = Color.White,
-            style = Stroke(width = 2.5f * scaleX, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
-        )
-
-        // 3. Draw glowing pink phantom eye
-        drawPath(
-            path = eyePath,
-            color = Color(0xFFFE1880)
-        )
-    }
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.logo_icon),
+        contentDescription = "Phantm Logo Icon",
+        modifier = modifier
+    )
 }
 
 @Composable
 fun PhantmLogoWithText(
     modifier: Modifier = Modifier
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.logo_text),
+        contentDescription = "Phantm Logo with Text",
         modifier = modifier
-    ) {
-        PhantmLogoIcon(modifier = Modifier.size(54.dp))
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(
-                text = "Phantm",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = "SECURE PROTOCOL",
-                color = CyberCyan,
-                fontSize = 8.sp,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-        }
-    }
+    )
 }
 

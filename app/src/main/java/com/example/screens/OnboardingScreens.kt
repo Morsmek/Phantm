@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,9 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.components.WordChip
-import com.example.components.PhantmLogoIcon
-import com.example.components.PhantmLogoWithText
+import com.example.components.*
 import com.example.crypto.Bip39
 import com.example.ui.theme.*
 import com.example.viewmodel.PhantmViewModel
@@ -50,7 +49,7 @@ fun WelcomeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -59,14 +58,38 @@ fun WelcomeScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Elegant signature logo drawn pure in Compose with neon glowing lines
-            PhantmLogoIcon(
+            Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .testTag("app_logo_icon")
-            )
+                    .size(240.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Outer ring
+                Box(
+                    modifier = Modifier
+                        .size(220.dp)
+                        .border(1.dp, CyberCyan.copy(alpha = 0.08f), CircleShape)
+                )
+                // Middle ring
+                Box(
+                    modifier = Modifier
+                        .size(170.dp)
+                        .border(1.dp, CyberCyan.copy(alpha = 0.15f), CircleShape)
+                )
+                // Inner ring
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .border(1.dp, CyberCyan.copy(alpha = 0.3f), CircleShape)
+                )
+                // Logo Icon Image
+                PhantmLogoIcon(
+                    modifier = Modifier
+                        .size(70.dp)
+                        .testTag("app_logo_icon")
+                )
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
             Text(
                 text = "PHANTM",
@@ -74,7 +97,7 @@ fun WelcomeScreen(
                 fontSize = 36.sp,
                 fontFamily = MonospaceFontFamily,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 4.sp,
+                letterSpacing = 6.sp,
                 modifier = Modifier.testTag("app_logo_title")
             )
 
@@ -83,7 +106,7 @@ fun WelcomeScreen(
             Text(
                 text = "Private by design. Yours by default.",
                 color = CyberTextSecondary,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 fontFamily = FontFamily.SansSerif
             )
@@ -96,7 +119,7 @@ fun WelcomeScreen(
                     containerColor = CyberCyan,
                     contentColor = CyberBlack
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -118,9 +141,9 @@ fun WelcomeScreen(
                     contentColor = CyberCyan
                 ),
                 border = ButtonDefaults.outlinedButtonBorder.copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(CyberCyan.copy(alpha = 0.5f))
+                    brush = androidx.compose.ui.graphics.SolidColor(CyberCyan)
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -151,6 +174,7 @@ fun PassphraseScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp)
             .verticalScroll(rememberScrollState())
     ) {
@@ -302,7 +326,7 @@ fun PassphraseScreen(
                 disabledContainerColor = CyberCyan.copy(alpha = 0.2f),
                 disabledContentColor = CyberTextSecondary.copy(alpha = 0.3f)
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
@@ -368,6 +392,7 @@ fun PassphraseConfirmScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp)
             .verticalScroll(rememberScrollState())
     ) {
@@ -436,6 +461,7 @@ fun PassphraseConfirmScreen(
                     unfocusedBorderColor = CyberBorder,
                     cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 textStyle = TextStyle(fontFamily = MonospaceFontFamily),
                 modifier = Modifier
@@ -487,6 +513,7 @@ fun PassphraseConfirmScreen(
                     unfocusedBorderColor = CyberBorder,
                     cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 textStyle = TextStyle(fontFamily = MonospaceFontFamily),
                 modifier = Modifier
@@ -538,6 +565,7 @@ fun PassphraseConfirmScreen(
                     unfocusedBorderColor = CyberBorder,
                     cursorColor = CyberCyan
                 ),
+                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
                 shape = RoundedCornerShape(8.dp),
                 textStyle = TextStyle(fontFamily = MonospaceFontFamily),
                 modifier = Modifier
@@ -580,7 +608,7 @@ fun PassphraseConfirmScreen(
                 containerColor = CyberCyan,
                 contentColor = CyberBlack
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
@@ -610,6 +638,7 @@ fun RecoverScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CyberBlack)
+            .drawDotGrid()
             .padding(24.dp)
             .verticalScroll(rememberScrollState())
     ) {
@@ -658,6 +687,7 @@ fun RecoverScreen(
                 focusedContainerColor = CyberCard,
                 unfocusedContainerColor = CyberCard
             ),
+            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
             shape = RoundedCornerShape(12.dp),
             textStyle = TextStyle(fontFamily = MonospaceFontFamily, fontSize = 14.sp),
             modifier = Modifier
@@ -715,7 +745,7 @@ fun RecoverScreen(
                 containerColor = CyberCyan,
                 contentColor = CyberBlack
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
