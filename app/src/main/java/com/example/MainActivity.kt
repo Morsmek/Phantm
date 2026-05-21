@@ -291,9 +291,9 @@ fun CustomNavigationBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
             .background(CyberBlack)
             .windowInsetsPadding(WindowInsets.navigationBars) // Essential adaptive notch padding!
+            .height(64.dp)
             .drawBehind {
                 // Top border stroke
                 drawLine(
