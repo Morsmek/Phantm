@@ -488,6 +488,7 @@ fun ChatDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(CyberSurface)
+                .statusBarsPadding()
                 .drawBehind {
                     // bottom highlight cyber divider
                     drawLine(
@@ -1546,6 +1547,7 @@ fun AddContactScreen(
             .fillMaxSize()
             .background(CyberBlack)
             .drawDotGrid()
+            .statusBarsPadding()
             .padding(24.dp)
     ) {
         // Back action header
@@ -2165,7 +2167,7 @@ fun ProfileScreen(
         }
     }
 
-    var activeProfileTab by remember { mutableStateOf(1) } // Default to CHANNELS (tab 1)
+    var activeProfileTab by remember { mutableStateOf(0) } // Default to IDENTITY (tab 0)
 
     Box(
         modifier = modifier
@@ -2175,7 +2177,9 @@ fun ProfileScreen(
             .padding(24.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
@@ -2206,7 +2210,7 @@ fun ProfileScreen(
                     .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
                     .padding(4.dp)
             ) {
-                val tabs = listOf("token", "CHANNELS", "ARCHIVE")
+                val tabs = listOf("IDENTITY", "CHANNELS", "ARCHIVE")
                 tabs.forEachIndexed { index, title ->
                     Box(
                         modifier = Modifier
@@ -2377,6 +2381,94 @@ fun ProfileScreen(
                             Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberBlack)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("SHARE MY SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Share details card
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CyberSurface)
+                                .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                text = "SHARE PHANTM USER DETAILS",
+                                color = CyberCyan,
+                                fontSize = 12.sp,
+                                fontFamily = MonospaceFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            Text(
+                                text = "ALIAS: ${self.displayName}",
+                                color = CyberTextPrimary,
+                                fontSize = 12.sp,
+                                fontFamily = MonospaceFontFamily,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            
+                            Spacer(modifier = Modifier.height(6.dp))
+                            
+                            Text(
+                                text = "PUBLIC KEY:\n${self.publicKey}",
+                                color = CyberTextSecondary,
+                                fontSize = 10.sp,
+                                fontFamily = MonospaceFontFamily,
+                                lineHeight = 14.sp
+                            )
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        self.publicKey?.let { pk ->
+                                            val fullDetails = "Alias: ${self.displayName}\nPhantm ID: $pk\nLink: phantm://sync?key=$pk&name=${java.net.URLEncoder.encode(self.displayName, "UTF-8")}"
+                                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            cb.setPrimaryClip(ClipData.newPlainText("Phantm User Details", fullDetails))
+                                            viewModel.showToast("Full details copied to clipboard", "success")
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberSurface, contentColor = CyberCyan),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+                                    modifier = Modifier.weight(1f).height(40.dp)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("COPY DETAILS", fontSize = 10.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        self.publicKey?.let { pk ->
+                                            val fullDetails = "Alias: ${self.displayName}\nPhantm ID: $pk\nLink: phantm://sync?key=$pk&name=${java.net.URLEncoder.encode(self.displayName, "UTF-8")}"
+                                            val shareIntent = android.content.Intent().apply {
+                                                action = android.content.Intent.ACTION_SEND
+                                                putExtra(android.content.Intent.EXTRA_TEXT, fullDetails)
+                                                type = "text/plain"
+                                            }
+                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Phantm Details"))
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f).height(40.dp)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = CyberBlack, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("SHARE DETAILS", fontSize = 10.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                     1 -> { // Tab 1: CHANNELS (Recovery credentials / Private keys)
