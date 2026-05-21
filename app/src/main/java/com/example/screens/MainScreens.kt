@@ -9,6 +9,8 @@ import android.view.WindowManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -479,6 +481,7 @@ fun ChatDetailScreen(
             .fillMaxSize()
             .background(CyberBlack)
             .drawDotGrid()
+            .imePadding()
     ) {
         // Chat Header View block
         Row(
@@ -1029,7 +1032,8 @@ data class ParticleData(
 @Composable
 fun PhantmSphere(
     state: SphereState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    qrBitmap: Bitmap? = null
 ) {
     val particles = remember {
         val random = java.util.Random(42)
@@ -1148,7 +1152,8 @@ fun PhantmSphere(
             Triple(px, py, zDepth) to p
         }.sortedBy { it.first.third }
 
-        projected.forEach { (pos, p) ->
+        // Helper to draw a single particle
+        val drawParticle: (Triple<Float, Float, Float>, ParticleData) -> Unit = { pos, p ->
             val (px, py, zDepth) = pos
             val depthRatio = (zDepth / rBase).coerceIn(-1f, 1f)
             val alphaVal = (0.35f + 0.65f * (depthRatio + 1f) / 2f).coerceIn(0.1f, 1.0f)
@@ -1176,6 +1181,29 @@ fun PhantmSphere(
                     center = Offset(px, py)
                 )
             }
+        }
+
+        // Stage 1: Draw particles behind the center (zDepth <= 0)
+        projected.filter { it.first.third <= 0f }.forEach { (pos, p) ->
+            drawParticle(pos, p)
+        }
+
+        // Stage 2: Draw the QR Code in the center (only if provided)
+        qrBitmap?.let { bitmap ->
+            val imageBitmap = bitmap.asImageBitmap()
+            val sizePx = (rBase * 0.85f).coerceIn(120.dp.toPx(), 200.dp.toPx())
+            val left = centerX - sizePx / 2f
+            val top = centerY - sizePx / 2f
+            drawImage(
+                image = imageBitmap,
+                dstOffset = androidx.compose.ui.unit.IntOffset(left.toInt(), top.toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(sizePx.toInt(), sizePx.toInt())
+            )
+        }
+
+        // Stage 3: Draw particles in front of the center (zDepth > 0)
+        projected.filter { it.first.third > 0f }.forEach { (pos, p) ->
+            drawParticle(pos, p)
         }
     }
 }
@@ -1284,7 +1312,7 @@ fun generateQrCode(content: String, width: Int, height: Int): Bitmap? {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         for (x in 0 until width) {
             for (y in 0 until height) {
-                val color = if (bitMatrix.get(x, y)) AndroidColor.WHITE else AndroidColor.TRANSPARENT
+                val color = if (bitMatrix.get(x, y)) AndroidColor.WHITE else 0xFF070B0E.toInt()
                 bitmap.setPixel(x, y, color)
             }
         }
@@ -1406,12 +1434,10 @@ fun ShareMySphereDialog(
                     )
 
                     if (qrBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "QR Sync Code",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp))
+                        PhantmSphere(
+                            state = SphereState.IDLE,
+                            modifier = Modifier.fillMaxSize(),
+                            qrBitmap = qrBitmap
                         )
                     } else {
                         Text("FAIL TO GENERATE QR", color = CyberRed, fontFamily = MonospaceFontFamily)
@@ -1465,7 +1491,7 @@ fun AddContactScreen(
     onContactLinked: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var activeTab by remember { mutableStateOf(0) } // 0: ENTER KEY, 1: SPHERE
+    var activeTab by remember { mutableStateOf(0) } // 0: PHANTM LINK, 1: SCAN QR CODE
     var peerIdInput by remember { mutableStateOf("") }
     var peerAliasInput by remember { mutableStateOf("") }
     var peerPassphraseInput by remember { mutableStateOf("") }
@@ -1499,14 +1525,14 @@ fun AddContactScreen(
         hasCameraPermission = isGranted
     }
 
-    // Launch camera permission when entering PAIRING mode
-    LaunchedEffect(scanPhase) {
-        if (scanPhase == ScanPhase.PAIRING && !hasCameraPermission) {
+    // Launch camera permission when entering PAIRING mode on Tab 0 or when activeTab is 1
+    LaunchedEffect(scanPhase, activeTab) {
+        if ((scanPhase == ScanPhase.PAIRING || activeTab == 1) && !hasCameraPermission) {
             permissionLauncher.launch(android.Manifest.permission.CAMERA)
         }
     }
 
-    // 2-second key exchange animation
+    // 2-second key exchange animation for sphere scanning
     LaunchedEffect(isKeyExchanging) {
         if (isKeyExchanging) {
             delay(2000)
@@ -1522,7 +1548,7 @@ fun AddContactScreen(
             .drawDotGrid()
             .padding(24.dp)
     ) {
-        // Simple back action header
+        // Back action header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1543,7 +1569,7 @@ fun AddContactScreen(
             )
         }
 
-        // Custom segment slider tabs
+        // Tab slider: Tab 0: PHANTM LINK, Tab 1: SCAN QR CODE
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1557,12 +1583,15 @@ fun AddContactScreen(
                     .weight(1f)
                     .clip(RoundedCornerShape(6.dp))
                     .background(if (activeTab == 0) CyberCyan else Color.Transparent)
-                    .clickable { activeTab = 0 }
+                    .clickable { 
+                        activeTab = 0 
+                        scanPhase = ScanPhase.IDLE // Reset phase when switching tabs
+                    }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "ENTER KEY",
+                    text = "PHANTM LINK",
                     color = if (activeTab == 0) CyberBlack else CyberTextSecondary,
                     fontSize = 12.sp,
                     fontFamily = MonospaceFontFamily,
@@ -1580,7 +1609,7 @@ fun AddContactScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "SPHERE",
+                    text = "SCAN QR CODE",
                     color = if (activeTab == 1) CyberBlack else CyberTextSecondary,
                     fontSize = 12.sp,
                     fontFamily = MonospaceFontFamily,
@@ -1592,171 +1621,154 @@ fun AddContactScreen(
         Spacer(modifier = Modifier.height(28.dp))
 
         if (activeTab == 0) {
-            // Text Enter ID
-            Text(
-                text = "PEER PUBLIC ID (64-CHAR HEX)",
-                color = CyberCyan,
-                fontSize = 11.sp,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            OutlinedTextField(
-                value = peerIdInput,
-                onValueChange = { peerIdInput = it.filter { ch -> ch.isLetterOrDigit() }.take(64) },
-                placeholder = { Text("01af9b...", color = CyberTextSecondary.copy(alpha = 0.4f)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = CyberCyan,
-                    unfocusedBorderColor = CyberBorder,
-                    focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard,
-                    cursorColor = CyberCyan
-                ),
-                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
-                shape = RoundedCornerShape(8.dp),
-                textStyle = TextStyle(fontFamily = MonospaceFontFamily),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("peer_id_input_textfield")
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = "CONTACT HANDLE ALIAS (OPTIONAL)",
-                color = CyberCyan,
-                fontSize = 11.sp,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            OutlinedTextField(
-                value = peerAliasInput,
-                onValueChange = { peerAliasInput = it },
-                placeholder = { Text("Cipher Agent", color = CyberTextSecondary.copy(alpha = 0.4f)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = CyberCyan,
-                    unfocusedBorderColor = CyberBorder,
-                    focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard,
-                    cursorColor = CyberCyan
-                ),
-                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("peer_alias_input_textfield")
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = "PRE-SHARED PASSPHRASE (OPTIONAL FOR E2EE)",
-                color = CyberCyan,
-                fontSize = 11.sp,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            OutlinedTextField(
-                value = peerPassphraseInput,
-                onValueChange = { peerPassphraseInput = it },
-                placeholder = { Text("Enter secret to encrypt conversation", color = CyberTextSecondary.copy(alpha = 0.4f)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = CyberCyan,
-                    unfocusedBorderColor = CyberBorder,
-                    focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard,
-                    cursorColor = CyberCyan
-                ),
-                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
-                shape = RoundedCornerShape(8.dp),
-                visualTransformation = if (showPassphrase) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    val icon = if (showPassphrase) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                    IconButton(onClick = { showPassphrase = !showPassphrase }) {
-                        Icon(icon, contentDescription = "Toggle passphrase visibility", tint = CyberCyan)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("peer_passphrase_input_textfield")
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(
-                onClick = {
-                    if (peerIdInput.length == 64) {
-                        viewModel.addContact(peerIdInput, peerAliasInput, peerPassphraseInput.takeIf { it.isNotBlank() })
-                        onContactLinked(peerIdInput)
-                    } else {
-                        viewModel.showToast("Handshake require 64-char key length.", "error")
-                    }
-                },
-                enabled = peerIdInput.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = CyberCyan,
-                    contentColor = CyberBlack,
-                    disabledContainerColor = CyberCyan.copy(alpha = 0.2f),
-                    disabledContentColor = CyberTextSecondary.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .testTag("add_peer_button")
-            ) {
-                Text(
-                    text = "ESTABLISH SECURE LINK",
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = MonospaceFontFamily,
-                    letterSpacing = 1.sp
-                )
-            }
-        } else {
-            // SPHERE TAB LINKING FLOW
+            // PHANTM LINK TAB (Manual entry OR scan sphere)
             when (scanPhase) {
                 ScanPhase.IDLE -> {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     ) {
-                        PhantmSphere(
-                            state = SphereState.IDLE,
+                        Text(
+                            text = "PEER PUBLIC ID (64-CHAR HEX)",
+                            color = CyberCyan,
+                            fontSize = 11.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = peerIdInput,
+                            onValueChange = { peerIdInput = it.filter { ch -> ch.isLetterOrDigit() }.take(64) },
+                            placeholder = { Text("01af9b...", color = CyberTextSecondary.copy(alpha = 0.4f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedContainerColor = CyberCard,
+                                unfocusedContainerColor = CyberCard,
+                                cursorColor = CyberCyan
+                            ),
+                            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = TextStyle(fontFamily = MonospaceFontFamily),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(300.dp)
+                                .testTag("peer_id_input_textfield")
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         Text(
-                            text = "PHANTM SYNC SPHERE",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
+                            text = "CONTACT HANDLE ALIAS (OPTIONAL)",
+                            color = CyberCyan,
+                            fontSize = 11.sp,
                             fontFamily = MonospaceFontFamily,
-                            textAlign = TextAlign.Center
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = peerAliasInput,
+                            onValueChange = { peerAliasInput = it },
+                            placeholder = { Text("Cipher Agent", color = CyberTextSecondary.copy(alpha = 0.4f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedContainerColor = CyberCard,
+                                unfocusedContainerColor = CyberCard,
+                                cursorColor = CyberCyan
+                            ),
+                            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("peer_alias_input_textfield")
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         Text(
-                            text = "Initiate decentralized secure channel linking using standard Phantm light spheres.",
-                            color = CyberTextSecondary,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            text = "PRE-SHARED PASSPHRASE (OPTIONAL FOR E2EE)",
+                            color = CyberCyan,
+                            fontSize = 11.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = peerPassphraseInput,
+                            onValueChange = { peerPassphraseInput = it },
+                            placeholder = { Text("Enter secret to encrypt conversation", color = CyberTextSecondary.copy(alpha = 0.4f)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedContainerColor = CyberCard,
+                                unfocusedContainerColor = CyberCard,
+                                cursorColor = CyberCyan
+                            ),
+                            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
+                            shape = RoundedCornerShape(8.dp),
+                            visualTransformation = if (showPassphrase) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                val icon = if (showPassphrase) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                IconButton(onClick = { showPassphrase = !showPassphrase }) {
+                                    Icon(icon, contentDescription = "Toggle passphrase visibility", tint = CyberCyan)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("peer_passphrase_input_textfield")
                         )
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Button(
+                            onClick = {
+                                if (peerIdInput.length == 64) {
+                                    viewModel.addContact(peerIdInput, peerAliasInput, peerPassphraseInput.takeIf { it.isNotBlank() })
+                                    onContactLinked(peerIdInput)
+                                } else {
+                                    viewModel.showToast("Handshake require 64-char key length.", "error")
+                                }
+                            },
+                            enabled = peerIdInput.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyberCyan,
+                                contentColor = CyberBlack,
+                                disabledContainerColor = CyberCyan.copy(alpha = 0.2f),
+                                disabledContentColor = CyberTextSecondary.copy(alpha = 0.3f)
+                            ),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("add_peer_button")
+                        ) {
+                            Text(
+                                text = "ESTABLISH SECURE LINK",
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = MonospaceFontFamily,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "OR USE THE LIGHT SPHERE SYNC",
+                            color = CyberTextSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Button(
                             onClick = { scanPhase = ScanPhase.PAIRING },
@@ -1766,6 +1778,8 @@ fun AddContactScreen(
                                 .fillMaxWidth()
                                 .height(50.dp)
                         ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = CyberBlack)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text("SCAN PEER'S SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
                         }
 
@@ -1780,6 +1794,8 @@ fun AddContactScreen(
                                 .fillMaxWidth()
                                 .height(50.dp)
                         ) {
+                            Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberCyan)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text("SHARE MY SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -1908,7 +1924,7 @@ fun AddContactScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Hold camera adjacent to a peer's shared Phantm QR code.",
+                                    text = "Hold camera adjacent to a peer's shared Phantm light sphere.",
                                     color = CyberTextSecondary,
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center
@@ -1919,21 +1935,6 @@ fun AddContactScreen(
                         Spacer(modifier = Modifier.weight(1f))
 
                         if (!isKeyExchanging) {
-                            Button(
-                                onClick = {
-                                    scannedKey = "a2002341b52bcce1030e4dbdf" + "0".repeat(39)
-                                    scannedName = "Scanned Cipher Node"
-                                    isKeyExchanging = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.fillMaxWidth().height(50.dp)
-                            ) {
-                                Text("SCAN SIMULATION KEY", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
                             TextButton(
                                 onClick = { scanPhase = ScanPhase.IDLE },
                                 modifier = Modifier.fillMaxWidth()
@@ -2023,8 +2024,106 @@ fun AddContactScreen(
                     }
                 }
             }
+        } else {
+            // Tab 1: SCAN QR CODE
+            var qrScanSuccess by remember { mutableStateOf(false) }
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(2.dp, CyberCyan, RoundedCornerShape(12.dp))
+                        .background(CyberSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (hasCameraPermission) {
+                        CameraScannerView(
+                            onQrScanned = { qrValue ->
+                                val parsed = parsePhantmSyncUri(qrValue)
+                                if (parsed != null && !qrScanSuccess) {
+                                    qrScanSuccess = true
+                                    val (key, name) = parsed
+                                    viewModel.addContact(key, name)
+                                    viewModel.showToast("Linked contact: $name", "success")
+                                    onContactLinked(key)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                tint = CyberRed.copy(alpha = 0.5f),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "CAMERA BLOCKED",
+                                color = CyberRed,
+                                fontSize = 11.sp,
+                                fontFamily = MonospaceFontFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Large Rectangular Cyberpunk Viewfinder Frame overlay
+                    val infiniteTransition = rememberInfiniteTransition(label = "scanner")
+                    val scannerY by infiniteTransition.animateFloat(
+                        initialValue = 0.1f,
+                        targetValue = 0.9f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "scannerSweep"
+                    )
+
+                    // Draw a scanner line
+                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                        val strokeWidth = 2.dp.toPx()
+                        val lineY = size.height * scannerY
+                        drawLine(
+                            color = CyberCyan,
+                            start = Offset(0f, lineY),
+                            end = Offset(size.width, lineY),
+                            strokeWidth = strokeWidth
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Align standard QR code in the viewfinder to link peer directly.",
+                    color = CyberTextSecondary,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
         }
         Spacer(modifier = Modifier.height(20.dp))
+    }
+
+    if (showShareDialog) {
+        ShareMySphereDialog(
+            isOpen = true,
+            onClose = { showShareDialog = false },
+            myPublicKey = myPublicKey,
+            myName = myName
+        )
     }
 }
 
@@ -2042,6 +2141,7 @@ fun ProfileScreen(
 
     var isEditingName by remember { mutableStateOf(false) }
     var editingNameValue by remember { mutableStateOf("") }
+    var showShareDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? Activity
@@ -2238,50 +2338,45 @@ fun ProfileScreen(
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
 
-                        // Deterministic QR Code representation based on user public key
-                        val pk = self.publicKey ?: ""
-                        val qrGridSize = 21 // Version 1 QR is 21x21
-                        androidx.compose.foundation.Canvas(
-                            modifier = Modifier
-                                .size(140.dp)
-                                .background(Color.White)
-                                .border(1.dp, CyberCyan)
-                                .padding(6.dp)
-                        ) {
-                            val blockSize = size.width / qrGridSize
-                            val bytes = pk.toByteArray()
-                            var byteIndex = 0
-                            var bitIndex = 0
-                            for (row in 0 until qrGridSize) {
-                                for (col in 0 until qrGridSize) {
-                                    val isFinder = (row < 7 && col < 7) || (row < 7 && col >= qrGridSize - 7) || (row >= qrGridSize - 7 && col < 7)
-                                    val isFilled = if (isFinder) {
-                                        val r = if (row >= qrGridSize - 7) row - (qrGridSize - 7) else row
-                                        val c = if (col >= qrGridSize - 7) col - (qrGridSize - 7) else col
-                                        (r == 0 || r == 6 || c == 0 || c == 6) || (r in 2..4 && c in 2..4)
-                                    } else {
-                                        if (bytes.isNotEmpty()) {
-                                            val byte = bytes[byteIndex % bytes.size].toInt()
-                                            val bit = (byte shr bitIndex) and 1
-                                            bitIndex++
-                                            if (bitIndex >= 8) {
-                                                bitIndex = 0
-                                                byteIndex++
-                                            }
-                                            bit == 1
-                                        } else {
-                                            (row + col) % 2 == 0
-                                        }
-                                    }
-                                    if (isFilled) {
-                                        drawRect(
-                                            color = Color.Black,
-                                            topLeft = Offset(col * blockSize, row * blockSize),
-                                            size = androidx.compose.ui.geometry.Size(blockSize, blockSize)
-                                        )
-                                    }
-                                }
+                        val qrContent = remember(self.publicKey, self.displayName) {
+                            try {
+                                "phantm://sync?key=${self.publicKey}&name=${java.net.URLEncoder.encode(self.displayName, "UTF-8")}"
+                            } catch (e: Exception) {
+                                "phantm://sync?key=${self.publicKey}&name=${self.displayName}"
                             }
+                        }
+                        val qrBitmap = remember(qrContent) {
+                            generateQrCode(qrContent, 512, 512)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp)
+                                .clip(CircleShape)
+                                .border(1.dp, CyberCyan, CircleShape)
+                                .background(CyberSurface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PhantmSphere(
+                                state = SphereState.IDLE,
+                                modifier = Modifier.fillMaxSize(),
+                                qrBitmap = qrBitmap
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { showShareDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberBlack)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("SHARE MY SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
                         }
                     }
                     1 -> { // Tab 1: CHANNELS (Recovery credentials / Private keys)
@@ -2570,6 +2665,17 @@ fun ProfileScreen(
                     }
                 }
             )
+        }
+
+        if (showShareDialog) {
+            identity?.let { self ->
+                ShareMySphereDialog(
+                    isOpen = true,
+                    onClose = { showShareDialog = false },
+                    myPublicKey = self.publicKey ?: "",
+                    myName = self.displayName
+                )
+            }
         }
     }
 }
