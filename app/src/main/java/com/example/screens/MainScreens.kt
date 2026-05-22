@@ -712,7 +712,7 @@ fun ChatDetailScreen(
                 Text("COPY CIPHERTEXT", color = CyberTextPrimary, fontSize = 13.sp, fontFamily = MonospaceFontFamily)
             }
 
-            Divider(color = CyberBorder, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = CyberBorder, modifier = Modifier.padding(vertical = 4.dp))
 
             Row(
                 modifier = Modifier
@@ -2524,7 +2524,9 @@ fun ProfileScreen(
                                         columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.height(150.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .wrapContentHeight()
                                     ) {
                                         items(words.size) { index ->
                                             WordChip(number = index + 1, word = words[index])

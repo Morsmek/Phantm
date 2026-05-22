@@ -1,5 +1,7 @@
 package com.example.viewmodel
 
+import com.example.BuildConfig
+
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -61,12 +63,18 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
     val bioVerified: StateFlow<Boolean> = _bioVerified.asStateFlow()
 
     fun verifyBioPin(pin: String): Boolean {
-        return if (pin == "1337" || pin.length == 4) { // accept 1337 or any 4 digit pin for demo
-            _bioVerified.value = true
-            true
+        // In debug builds, accept the demo PIN 1337 or any 4-digit code for convenience.
+        // In release builds, only accept the stored pinCode, falling back to 1337 if unset.
+        val storedPin = identitySettings.value?.pinCode
+        val isValid = if (BuildConfig.DEBUG) {
+            pin == "1337" || pin.length == 4
         } else {
-            false
+            pin == (storedPin ?: "1337")
         }
+        if (isValid) {
+            _bioVerified.value = true
+        }
+        return isValid
     }
 
     fun lockBio() {
@@ -222,11 +230,10 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
     // Global Reset
     fun resetIdentity() {
         viewModelScope.launch {
-            identityDao.clearIdentity()
-            // Reinsert unonboarded row
-            identityDao.insertOrUpdate(IdentitySettings())
-            // Clear other tables
+            disconnectWebSocket()
             db.clearAllTables()
+            // Re-insert a clean unonboarded identity row AFTER clearing tables
+            identityDao.insertOrUpdate(IdentitySettings())
             showToast("Identity Purged from Device memory", "error")
         }
     }
@@ -549,7 +556,8 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                         val retryKey = currentConnectedKey
                         if (retryKey != null) {
                             currentConnectedKey = null
-                            setupWebSocketConnection(retryKey, displayName)
+                            val currentName = identityDao.getIdentityOnce()?.displayName ?: displayName
+                            setupWebSocketConnection(retryKey, currentName)
                         }
                     }
                 }
@@ -561,7 +569,8 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                             val retryKey = currentConnectedKey
                             if (retryKey != null) {
                                 currentConnectedKey = null
-                                setupWebSocketConnection(retryKey, displayName)
+                                val currentName = identityDao.getIdentityOnce()?.displayName ?: displayName
+                                setupWebSocketConnection(retryKey, currentName)
                             }
                         }
                     }

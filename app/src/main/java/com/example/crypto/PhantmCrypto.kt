@@ -39,7 +39,7 @@ object PhantmCrypto {
         val passwordBytes = passphrase.toByteArray(Charsets.UTF_8)
         val saltBytes = salt.toByteArray(Charsets.UTF_8)
         val generator = PKCS5S2ParametersGenerator(SHA256Digest())
-        generator.init(passwordBytes, saltBytes, 1000)
+        generator.init(passwordBytes, saltBytes, 100_000)
         val keyParam = generator.generateDerivedParameters(512) as KeyParameter
         val keyBytes = keyParam.key
         val aesKeyBytes = keyBytes.copyOfRange(0, 32)
