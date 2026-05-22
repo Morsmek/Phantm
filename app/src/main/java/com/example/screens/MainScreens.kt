@@ -721,7 +721,7 @@ fun ChatDetailScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        viewModel.deleteMessage(contactId, selectedMsg.id)
+                        viewModel.deleteMessage(selectedMsg.id)
                         activeBottomSheetMessage = null
                     }
                     .padding(vertical = 12.dp),
@@ -1865,6 +1865,7 @@ fun AddContactScreen(
                             onClick = {
                                 if (peerIdInput.length == 64) {
                                     viewModel.addContact(peerIdInput, peerAliasInput, peerPassphraseInput.takeIf { it.isNotBlank() })
+                                    viewModel.sendHandshakeIntro(peerIdInput)
                                     onContactLinked(peerIdInput)
                                 } else {
                                     viewModel.showToast("Handshake require 64-char key length.", "error")
@@ -2222,6 +2223,7 @@ fun AddContactScreen(
                         Button(
                             onClick = {
                                 viewModel.addContact(scannedKey, scannedName)
+                                viewModel.sendHandshakeIntro(scannedKey)
                                 onContactLinked(scannedKey)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
@@ -2372,6 +2374,7 @@ fun AddContactScreen(
                             isResolving = false
                             if (key != null) {
                                 viewModel.addContact(key, name ?: "Peer_${key.take(8)}")
+                                viewModel.sendHandshakeIntro(key)
                                 onContactLinked(key)
                             } else {
                                 resolveError = "Code not found. Ask peer to tap BROADCAST CODE first."
@@ -2450,6 +2453,7 @@ fun AddContactScreen(
                                     qrScanSuccess = true
                                     val (key, name) = parsed
                                     viewModel.addContact(key, name)
+                                    viewModel.sendHandshakeIntro(key)
                                     viewModel.showToast("Linked contact: $name", "success")
                                     onContactLinked(key)
                                 }
@@ -2545,6 +2549,7 @@ fun ProfileScreen(
 ) {
     val identity by viewModel.identitySettings.collectAsStateWithLifecycle()
     val isVerified by viewModel.bioVerified.collectAsStateWithLifecycle()
+    val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinValue by remember { mutableStateOf("") }
@@ -3044,16 +3049,18 @@ fun ProfileScreen(
                                     modifier = Modifier.padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val statusColor = if (isConnected) CyberGreen else CyberRed
+                                    val statusText = if (isConnected) "ONLINE" else "OFFLINE"
                                     Box(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(CyberGreen)
+                                            .background(statusColor)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text("TUNNEL BROADCASTER", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = MonospaceFontFamily)
-                                        Text("Network Broker Status: ONLINE", color = CyberTextSecondary, fontSize = 11.sp)
+                                        Text("Network Broker Status: $statusText", color = CyberTextSecondary, fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -3212,7 +3219,6 @@ fun ProfileScreen(
 @Composable
 fun SettingsScreen(
     viewModel: PhantmViewModel,
-    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val identity by viewModel.identitySettings.collectAsStateWithLifecycle()
@@ -3435,7 +3441,6 @@ fun SettingsScreen(
                         onClick = {
                             viewModel.resetIdentity()
                             showWipeConfirm = false
-                            onLogout()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CyberRed, contentColor = Color.White)
                     ) {

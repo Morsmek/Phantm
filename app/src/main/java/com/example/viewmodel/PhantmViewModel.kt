@@ -59,6 +59,28 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         _toastState.value = null
     }
 
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val httpClient = OkHttpClient()
+    private var notificationCounter = 0
+
+    private val _appIsLocked = MutableStateFlow(false)
+    val appIsLocked: StateFlow<Boolean> = _appIsLocked.asStateFlow()
+
+    fun lockAppIfEnabled() {
+        viewModelScope.launch {
+            val prefs = identityDao.getIdentityOnce()
+            if (prefs?.appLockEnabled == true && prefs.isOnboarded) {
+                _appIsLocked.value = true
+            }
+        }
+    }
+
+    fun unlockApp() {
+        _appIsLocked.value = false
+    }
+
     // Secure screen session block state (Profile biometric code logic)
     private val _bioVerified = MutableStateFlow(false)
     val bioVerified: StateFlow<Boolean> = _bioVerified.asStateFlow()
@@ -96,30 +118,6 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             val existing = identityDao.getIdentityOnce()
             if (existing == null) {
                 identityDao.insertOrUpdate(IdentitySettings())
-            }
-            // Populate standard system onboarding default contact if empty
-            contactDao.getAllContactsFlow().first().let { currentContacts ->
-                if (currentContacts.isEmpty()) {
-                    val systemKey = "4e656f6e5068616e746d4e6f646554756e6e656c45737461626c697368656439" // Hex code representation of Neon Node
-                    contactDao.insertContact(
-                        ContactEntity(
-                            id = systemKey,
-                            name = "Neon Phantm Node",
-                            addedAt = System.currentTimeMillis()
-                        )
-                    )
-                    // Insert initial encryption message
-                    messageDao.insertMessage(
-                        MessageEntity(
-                            id = UUID.randomUUID().toString(),
-                            contactId = systemKey,
-                            content = "Mnemonic identity initialized. End-to-end local cipher tunnels active. Say hello to initiate decentralized handshake.",
-                            timestamp = System.currentTimeMillis() - 10000,
-                            isSent = false,
-                            status = "delivered"
-                        )
-                    )
-                }
             }
             // Handle automatic background cleanup of expired messages
             identityDao.getIdentityOnce()?.let { prefs ->
@@ -264,6 +262,30 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun sendHandshakeIntro(targetPublicKey: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val settings = identityDao.getIdentityOnce() ?: return@launch
+            val ourPublicKey = settings.publicKey ?: return@launch
+            try {
+                val payload = JSONObject().apply {
+                    put("type", "handshake_intro")
+                    put("senderId", ourPublicKey)
+                    put("senderName", settings.displayName)
+                    put("msgId", UUID.randomUUID().toString())
+                    put("timestamp", System.currentTimeMillis())
+                }.toString()
+                val url = "https://ntfy.sh/phantm_peer_$targetPublicKey"
+                val request = Request.Builder()
+                    .url(url)
+                    .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                httpClient.newCall(request).execute().close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun removeContact(id: String) {
         viewModelScope.launch {
             contactDao.deleteContact(id)
@@ -293,102 +315,62 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             )
             messageDao.insertMessage(msg)
 
-            val systemKey = "4e656f6e5068616e746d4e6f646554756e6e656c45737461626c697368656439"
-            if (contactId == systemKey) {
-                // Auto transition state sent -> delivered for offline simulated node
-                delay(400)
-                messageDao.insertMessage(msg.copy(status = "delivered"))
-                // Trigger simulated incoming reply
-                triggerSimulatedReply(contactId, content)
-            } else {
-                // Publish to genuine network broker ntfy.sh
-                val settings = identityDao.getIdentityOnce()
-                val ourPublicKey = settings?.publicKey ?: ""
-                val ourDisplayName = settings?.displayName ?: "Chosen Cipher"
-                
-                val contact = contactDao.getContactOnce(contactId)
-                val passphrase = contact?.passphrase
-                
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        val client = OkHttpClient()
-                        val payload = JSONObject().apply {
-                            put("senderId", ourPublicKey)
-                            put("senderName", ourDisplayName)
-                            put("msgId", msgId)
-                            put("timestamp", System.currentTimeMillis())
-                            
-                            if (!passphrase.isNullOrBlank()) {
-                                val encryptedData = PhantmCrypto.encrypt(content, passphrase, contactId)
-                                put("ciphertext", encryptedData.ciphertext)
-                                put("iv", encryptedData.iv)
-                                put("hmac", encryptedData.hmac)
-                            } else {
-                                put("content", content)
-                            }
-                        }.toString()
+            // Publish to genuine network broker ntfy.sh
+            val settings = identityDao.getIdentityOnce()
+            val ourPublicKey = settings?.publicKey ?: ""
+            val ourDisplayName = settings?.displayName ?: "Chosen Cipher"
+            
+            val contact = contactDao.getContactOnce(contactId)
+            val passphrase = contact?.passphrase
+            
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val client = httpClient
+                    val payload = JSONObject().apply {
+                        put("senderId", ourPublicKey)
+                        put("senderName", ourDisplayName)
+                        put("msgId", msgId)
+                        put("timestamp", System.currentTimeMillis())
+                        
+                        if (!passphrase.isNullOrBlank()) {
+                            val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
+                            val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
+                            put("ciphertext", encryptedData.ciphertext)
+                            put("iv", encryptedData.iv)
+                            put("hmac", encryptedData.hmac)
+                        } else {
+                            put("content", content)
+                        }
+                    }.toString()
 
-                        val url = "https://ntfy.sh/phantm_peer_$contactId"
-                        val request = Request.Builder()
-                            .url(url)
-                            .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
-                            .build()
+                    val url = "https://ntfy.sh/phantm_peer_$contactId"
+                    val request = Request.Builder()
+                        .url(url)
+                        .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                        .build()
 
-                        client.newCall(request).execute().use { response ->
-                            if (response.isSuccessful) {
-                                messageDao.insertMessage(msg.copy(status = "delivered"))
-                            } else {
-                                viewModelScope.launch {
-                                    showToast("Broker queued; counterpart offline.", "info")
-                                }
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            messageDao.insertMessage(msg.copy(status = "delivered"))
+                        } else {
+                            viewModelScope.launch {
+                                showToast("Broker queued; counterpart offline.", "info")
                             }
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        viewModelScope.launch {
-                            showToast("Packet cached locally. Delivery pending network.", "info")
-                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    viewModelScope.launch {
+                        showToast("Packet cached locally. Delivery pending network.", "info")
                     }
                 }
             }
         }
     }
 
-    private suspend fun triggerSimulatedReply(contactId: String, userMessage: String) {
-        delay(1200) // response simulation lag
-        val contact = contactDao.getContactOnce(contactId)
-        val name = contact?.name ?: "Unknown Peer"
 
-        val responses = listOf(
-            "Encrypted session active. Seed checksum verified.",
-            "Handshake verified, cipher synced.",
-            "Buffered communication completed. No middle nodes intercepted.",
-            "Decrypting payload... Verified. Safe to execute instructions.",
-            "Message packet signed with signature ed25519 success. Stored locally.",
-            "Sovereign Node is responding: transmission acknowledge.",
-            "Affirmative. Rotating keys in 15s. Communication secure."
-        )
-        val selectedText = responses.random()
 
-        val reply = MessageEntity(
-            id = UUID.randomUUID().toString(),
-            contactId = contactId,
-            content = selectedText,
-            isSent = false,
-            status = "delivered"
-        )
-        messageDao.insertMessage(reply)
-
-        // Show standard notification output if preferences allow and backgrounded-feel is desired
-        val settings = identitySettings.value
-        if (settings?.notificationsEnabled == true) {
-            val displayTitle = if (settings.showNotificationPreview) "New Phantm from $name" else "Phantm Secure Alert"
-            val displayBody = if (settings.showNotificationPreview) selectedText else "End-to-end encrypted packet received."
-            showSystemNotification(displayTitle, displayBody)
-        }
-    }
-
-    fun deleteMessage(contactId: String, messageId: String) {
+    fun deleteMessage(messageId: String) {
         viewModelScope.launch {
             messageDao.deleteMessage(messageId)
             showToast("Message deleted from device", "info")
@@ -454,7 +436,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(43, notification)
+        notificationManager.notify(notificationCounter++, notification)
     }
 
     // Real-Time WebSocket Broker Link Helpers
@@ -477,6 +459,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             val wsListener = object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     viewModelScope.launch {
+                        _isConnected.value = true
                         showToast("Secure Broker Link active", "success")
                     }
                 }
@@ -505,6 +488,20 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                                         existing = newContact
                                     }
 
+                                    // Handshake intro: contact was auto-created above. Do not insert a chat message.
+                                    val messageType = innerJson.optString("type", "")
+                                    if (messageType == "handshake_intro") {
+                                        val settings = identityDao.getIdentityOnce()
+                                        if (settings?.notificationsEnabled == true) {
+                                            showSystemNotification(
+                                                "New Phantm Contact",
+                                                "${existing.name} added you on Phantm"
+                                            )
+                                        }
+                                        showToast("${existing.name} added you as a contact", "success")
+                                        return@launch
+                                    }
+
                                     val passphrase = existing.passphrase
                                     var decryptedContent = innerJson.optString("content")
                                     val ciphertext = innerJson.optString("ciphertext", "")
@@ -514,7 +511,8 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                                     if (ciphertext.isNotBlank() && iv.isNotBlank() && hmac.isNotBlank()) {
                                         decryptedContent = if (!passphrase.isNullOrBlank()) {
                                             try {
-                                                PhantmCrypto.decrypt(ciphertext, iv, hmac, passphrase, senderId)
+                                                val salt = listOf(senderId, publicKey).sorted().joinToString("")
+                                                PhantmCrypto.decrypt(ciphertext, iv, hmac, passphrase, salt)
                                             } catch (e: SecurityException) {
                                                 "[Decryption Failed: Verification check failed. Passphrase mismatch.]"
                                             } catch (e: Exception) {
@@ -552,6 +550,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    _isConnected.value = false
                     viewModelScope.launch {
                         delay(5000)
                         val retryKey = currentConnectedKey
@@ -564,6 +563,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    _isConnected.value = false
                     if (code != 1000) {
                         viewModelScope.launch {
                             delay(5000)
@@ -584,6 +584,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun disconnectWebSocket() {
         try {
+            _isConnected.value = false
             webSocket?.close(1000, "Clean shutdown")
             webSocket = null
             okHttpClient = null
@@ -616,7 +617,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             val code = PhantmLinkCode.generate(publicKey)
 
             try {
-                val client = OkHttpClient()
+                val client = httpClient
                 val payload = JSONObject().apply {
                     put("type", "link_code_broadcast")
                     put("publicKey", publicKey)
