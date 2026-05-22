@@ -5,7 +5,9 @@ import com.example.BuildConfig
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
@@ -63,7 +65,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     private val httpClient = OkHttpClient()
-    private var notificationCounter = 0
+    private val notificationCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     private val _appIsLocked = MutableStateFlow(false)
     val appIsLocked: StateFlow<Boolean> = _appIsLocked.asStateFlow()
@@ -113,6 +115,19 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         )
 
     init {
+        // Create notification channel once on startup (Android 8+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val context = getApplication<Application>().applicationContext
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                "phantm_secure_alerts",
+                "Phantm Encrypted Alerts",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
         // Run database initializer
         viewModelScope.launch {
             val existing = identityDao.getIdentityOnce()
@@ -423,20 +438,27 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "phantm_secure_alerts"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Phantm Encrypted Alerts", NotificationManager.IMPORTANCE_DEFAULT)
-            notificationManager.createNotificationChannel(channel)
+        // Launch MainActivity when the notification is tapped
+        val launchIntent = Intent(context, Class.forName("com.example.MainActivity")).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationCounter.get(),
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Standard fall-back info symbol
+            .setSmallIcon(com.example.R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(notificationCounter++, notification)
+        notificationManager.notify(notificationCounter.getAndIncrement(), notification)
     }
 
     // Real-Time WebSocket Broker Link Helpers
