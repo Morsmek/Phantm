@@ -5,8 +5,6 @@ import android.content.Context
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
-import android.nfc.Tag
-import android.nfc.tech.Ndef
 import com.example.screens.parsePhantmSyncUri
 
 /**

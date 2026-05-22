@@ -43,7 +43,6 @@ import android.nfc.NfcAdapter
 import com.example.crypto.PhantmNfc
 
 class MainActivity : ComponentActivity() {
-    private var nfcAdapter: NfcAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,27 +57,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         PhantmNfc.enableForegroundDispatch(this)
-
-        // Broadcast own identity via NFC so nearby devices can receive it
-        val adapter = NfcAdapter.getDefaultAdapter(this)
-        if (adapter != null && adapter.isEnabled) {
-            val vm = androidx.lifecycle.ViewModelProvider(this)[PhantmViewModel::class.java]
-            val identity = vm.identitySettings.value
-            if (identity?.publicKey != null) {
-                try {
-                    val msg = PhantmNfc.buildNdefMessage(identity.publicKey, identity.displayName)
-                    val method = adapter.javaClass.getMethod(
-                        "setNdefPushMessage",
-                        android.nfc.NdefMessage::class.java,
-                        Activity::class.java,
-                        Array<Activity>::class.java
-                    )
-                    method.invoke(adapter, msg, this, emptyArray<Activity>())
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
     }
 
     override fun onPause() {
