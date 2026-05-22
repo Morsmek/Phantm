@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.crypto.Bip39
 import com.example.crypto.PhantmCrypto
+import com.example.crypto.PhantmLinkCode
 import com.example.db.*
 import com.example.types.Contact
 import com.example.types.Conversation
@@ -591,6 +592,112 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             currentConnectedKey = null
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private val _nfcIncomingContact = MutableSharedFlow<Pair<String, String>>(replay = 0)
+    val nfcIncomingContact = _nfcIncomingContact.asSharedFlow()
+
+    fun onNfcContactReceived(publicKey: String, displayName: String) {
+        viewModelScope.launch {
+            _nfcIncomingContact.emit(Pair(publicKey, displayName))
+        }
+    }
+
+    /**
+     * Broadcasts this device's public key + display name tagged with the current
+     * Phantm Link Code to the user's own ntfy.sh topic so a recipient can resolve
+     * the short code to the full key within the 10-minute validity window.
+     */
+    fun broadcastLinkCode() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val settings = identityDao.getIdentityOnce() ?: return@launch
+            val publicKey = settings.publicKey ?: return@launch
+            val code = PhantmLinkCode.generate(publicKey)
+
+            try {
+                val client = OkHttpClient()
+                val payload = JSONObject().apply {
+                    put("type", "link_code_broadcast")
+                    put("publicKey", publicKey)
+                    put("displayName", settings.displayName)
+                    put("linkCode", code.replace("-", ""))
+                    put("timestamp", System.currentTimeMillis())
+                }.toString()
+
+                val url = "https://ntfy.sh/phantm_broadcasts"
+                val request = Request.Builder()
+                    .url(url)
+                    .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                    .build()
+
+                client.newCall(request).execute().close()
+                viewModelScope.launch {
+                    showToast("Code broadcasted successfully", "success")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModelScope.launch {
+                    showToast("Broadcast failed: check network", "error")
+                }
+            }
+        }
+    }
+
+    /**
+     * Resolves a Phantm Link Code entered by the user. Polls the recipient's
+     * ntfy.sh topic for a broadcast message whose linkCode field matches the
+     * entered code. Times out after 30 seconds.
+     *
+     * Calls onResult(publicKey, displayName) on success, onResult(null, null) on failure.
+     */
+    fun resolveLinkCode(
+        enteredCode: String,
+        onResult: (publicKey: String?, displayName: String?) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val normalised = enteredCode.trim().uppercase().replace("-", "")
+            if (normalised.length != 8) {
+                viewModelScope.launch { onResult(null, null) }
+                return@launch
+            }
+
+            try {
+                val client = OkHttpClient.Builder()
+                    .readTimeout(35, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+
+                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=600"
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: ""
+                response.close()
+
+                // Parse newline-delimited JSON from ntfy poll response
+                for (line in body.lines()) {
+                    if (line.isBlank()) continue
+                    try {
+                        val obj = JSONObject(line)
+                        val msgText = obj.optString("message")
+                        if (msgText.isBlank()) continue
+                        val inner = JSONObject(msgText)
+                        if (inner.optString("type") != "link_code_broadcast") continue
+                        val broadcastCode = inner.optString("linkCode")
+                        val broadcastKey = inner.optString("publicKey")
+                        if (broadcastCode == normalised && broadcastKey.length == 64) {
+                            val displayName = inner.optString("displayName", "Peer_${broadcastKey.take(8)}")
+                            viewModelScope.launch { onResult(broadcastKey, displayName) }
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        continue
+                    }
+                }
+                viewModelScope.launch { onResult(null, null) }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModelScope.launch { onResult(null, null) }
+            }
         }
     }
 

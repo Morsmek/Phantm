@@ -79,6 +79,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
 import java.util.concurrent.Executors
+import com.example.crypto.PhantmLinkCode
+import androidx.compose.material3.CircularProgressIndicator
+import com.example.crypto.PhantmNfc
 import android.annotation.SuppressLint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1251,54 +1254,49 @@ fun CameraScannerView(
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    // Stable callback ref — prevents analyzer from holding a stale lambda
+    val onQrScannedRef = rememberUpdatedState(onQrScanned)
 
     AndroidView(
         factory = { ctx ->
-            PreviewView(ctx).apply {
+            val previewView = PreviewView(ctx).apply {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
-        },
-        modifier = modifier,
-        update = { previewView ->
-            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            // Bind camera once in factory, never in update
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
-
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also {
                         it.setAnalyzer(cameraExecutor, PhantmBarcodeAnalyzer { qrValue ->
-                            previewView.post {
-                                onQrScanned(qrValue)
-                            }
+                            previewView.post { onQrScannedRef.value(qrValue) }
                         })
                     }
-
-                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
                 try {
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
-                        cameraSelector,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
                         imageAnalysis
                     )
                 } catch (exc: Exception) {
                     exc.printStackTrace()
                 }
-            }, ContextCompat.getMainExecutor(context))
-        }
+            }, ContextCompat.getMainExecutor(ctx))
+            previewView
+        },
+        modifier = modifier
+        // No update{} block — camera is bound once in factory
     )
 
     DisposableEffect(Unit) {
-        onDispose {
-            cameraExecutor.shutdown()
-        }
+        onDispose { cameraExecutor.shutdown() }
     }
 }
 
@@ -1479,6 +1477,155 @@ fun ShareMySphereDialog(
     }
 }
 
+@Composable
+fun StandaloneQrDialog(
+    isOpen: Boolean,
+    onClose: () -> Unit,
+    myPublicKey: String,
+    myName: String
+) {
+    if (!isOpen) return
+
+    val qrContent = remember(myPublicKey, myName) {
+        try {
+            "phantm://sync?key=$myPublicKey&name=${java.net.URLEncoder.encode(myName, "UTF-8")}"
+        } catch (e: Exception) {
+            "phantm://sync?key=$myPublicKey&name=$myName"
+        }
+    }
+    val qrBitmap = remember(qrContent) { generateQrCode(qrContent, 768, 768) }
+    val context = LocalContext.current
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(CyberSurface)
+                .border(1.dp, CyberBorder, RoundedCornerShape(16.dp))
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SCAN TO ADD ME",
+                        color = CyberCyan,
+                        fontSize = 14.sp,
+                        fontFamily = MonospaceFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = CyberCyan)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Plain QR — no sphere overlay, readable by any QR app
+                if (qrBitmap != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(260.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF070B0E))
+                            .border(2.dp, CyberCyan, RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.foundation.Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "QR Code",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(260.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CyberCard)
+                            .border(1.dp, CyberRed, RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("QR GENERATION FAILED", color = CyberRed, fontFamily = MonospaceFontFamily)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = myName.uppercase(),
+                    color = CyberTextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = MonospaceFontFamily
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = PhantmCrypto.truncateKey(myPublicKey, 12),
+                    color = CyberTextSecondary,
+                    fontSize = 11.sp,
+                    fontFamily = MonospaceFontFamily
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Share button — lets the user send the QR URI via any app they choose
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cb.setPrimaryClip(ClipData.newPlainText("Phantm Sync Link", qrContent))
+                        },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("COPY LINK", fontSize = 11.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = {
+                            val shareIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                putExtra(android.content.Intent.EXTRA_TEXT, qrContent)
+                                type = "text/plain"
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Phantm Link"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("SHARE", fontSize = 11.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
+                    Text("CLOSE", color = CyberTextSecondary, fontFamily = MonospaceFontFamily)
+                }
+            }
+        }
+    }
+}
+
 enum class ScanPhase {
     IDLE,
     PAIRING,
@@ -1504,6 +1651,7 @@ fun AddContactScreen(
     var scannedName by remember { mutableStateOf("") }
     var isKeyExchanging by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val identityState by viewModel.identitySettings.collectAsStateWithLifecycle()
@@ -1528,7 +1676,7 @@ fun AddContactScreen(
 
     // Launch camera permission when entering PAIRING mode on Tab 0 or when activeTab is 1
     LaunchedEffect(scanPhase, activeTab) {
-        if ((scanPhase == ScanPhase.PAIRING || activeTab == 1) && !hasCameraPermission) {
+        if ((scanPhase == ScanPhase.PAIRING || activeTab == 2) && !hasCameraPermission) {
             permissionLauncher.launch(android.Manifest.permission.CAMERA)
         }
     }
@@ -1571,7 +1719,7 @@ fun AddContactScreen(
             )
         }
 
-        // Tab slider: Tab 0: PHANTM LINK, Tab 1: SCAN QR CODE
+        // Tab slider: 0: PHANTM LINK, 1: LINK CODE, 2: SCAN QR
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1580,43 +1728,27 @@ fun AddContactScreen(
                 .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
                 .padding(4.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (activeTab == 0) CyberCyan else Color.Transparent)
-                    .clickable { 
-                        activeTab = 0 
-                        scanPhase = ScanPhase.IDLE // Reset phase when switching tabs
-                    }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "PHANTM LINK",
-                    color = if (activeTab == 0) CyberBlack else CyberTextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = MonospaceFontFamily,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (activeTab == 1) CyberCyan else Color.Transparent)
-                    .clickable { activeTab = 1 }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "SCAN QR CODE",
-                    color = if (activeTab == 1) CyberBlack else CyberTextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = MonospaceFontFamily,
-                    fontWeight = FontWeight.Bold
-                )
+            listOf("PHANTM LINK", "LINK CODE", "SCAN QR").forEachIndexed { index, label ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (activeTab == index) CyberCyan else Color.Transparent)
+                        .clickable {
+                            activeTab = index
+                            if (index != 0) scanPhase = ScanPhase.IDLE
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        color = if (activeTab == index) CyberBlack else CyberTextSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = MonospaceFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -1799,6 +1931,96 @@ fun AddContactScreen(
                             Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberCyan)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("SHARE MY SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = { showQrDialog = true },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, tint = CyberCyan)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("SHOW QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "OR TAP PHONES TOGETHER",
+                            color = CyberTextSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val nfcAvailable = remember { PhantmNfc.isAvailable(context) }
+                        val nfcEnabled = remember { PhantmNfc.isEnabled(context) }
+
+                        if (nfcAvailable) {
+                            if (nfcEnabled) {
+                                // NFC is ready — show status card
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CyberCard)
+                                        .border(1.dp, CyberGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(CyberGreen)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("NFC ACTIVE", color = CyberGreen, fontSize = 12.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            "Hold this phone against peer's phone back-to-back to exchange identity automatically.",
+                                            color = CyberTextSecondary,
+                                            fontSize = 11.sp,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            } else {
+                                // NFC present but disabled
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CyberCard)
+                                        .border(1.dp, CyberRed.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = CyberRed, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("NFC is disabled. Enable it in system settings to use tap exchange.", color = CyberTextSecondary, fontSize = 11.sp)
+                                }
+                            }
+                        } else {
+                            // No NFC hardware
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyberCard)
+                                    .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("NFC not available on this device.", color = CyberTextSecondary, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
@@ -2026,8 +2248,186 @@ fun AddContactScreen(
                     }
                 }
             }
+        } else if (activeTab == 1) {
+            // LINK CODE TAB
+            var linkCodeInput by remember { mutableStateOf("") }
+            var isResolving by remember { mutableStateOf(false) }
+            var resolveError by remember { mutableStateOf<String?>(null) }
+            val identityForCode by viewModel.identitySettings.collectAsStateWithLifecycle()
+            val myCode = remember(identityForCode?.publicKey) {
+                identityForCode?.publicKey?.let { PhantmLinkCode.generate(it) } ?: "----"
+            }
+            var countdown by remember { mutableStateOf(PhantmLinkCode.secondsRemaining()) }
+
+            LaunchedEffect(Unit) {
+                while (true) {
+                    countdown = PhantmLinkCode.secondsRemaining()
+                    delay(1000)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // My code card
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CyberCard)
+                        .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "MY LINK CODE",
+                        color = CyberCyan,
+                        fontSize = 11.sp,
+                        fontFamily = MonospaceFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = myCode,
+                        color = CyberTextPrimary,
+                        fontSize = 36.sp,
+                        fontFamily = MonospaceFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 4.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Expires in ${countdown}s",
+                        color = if (countdown < 60) CyberRed else CyberTextSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = MonospaceFontFamily
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.broadcastLinkCode() },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Text("BROADCAST CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "ENTER PEER'S CODE",
+                    color = CyberCyan,
+                    fontSize = 11.sp,
+                    fontFamily = MonospaceFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = linkCodeInput,
+                    onValueChange = {
+                        val raw = it.filter { ch -> ch.isLetterOrDigit() }.uppercase().take(8)
+                        linkCodeInput = if (raw.length > 4) "${raw.take(4)}-${raw.drop(4)}" else raw
+                        resolveError = null
+                    },
+                    placeholder = { Text("XXXX-XXXX", color = CyberTextSecondary.copy(alpha = 0.4f), fontFamily = MonospaceFontFamily) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = CyberCyan,
+                        unfocusedBorderColor = CyberBorder,
+                        focusedContainerColor = CyberCard,
+                        unfocusedContainerColor = CyberCard,
+                        cursorColor = CyberCyan
+                    ),
+                    textStyle = TextStyle(
+                        fontFamily = MonospaceFontFamily,
+                        fontSize = 24.sp,
+                        letterSpacing = 3.sp
+                    ),
+                    prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                resolveError?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(it, color = CyberRed, fontSize = 12.sp, fontFamily = MonospaceFontFamily)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        isResolving = true
+                        resolveError = null
+                        viewModel.resolveLinkCode(linkCodeInput) { key, name ->
+                            isResolving = false
+                            if (key != null) {
+                                viewModel.addContact(key, name ?: "Peer_${key.take(8)}")
+                                onContactLinked(key)
+                            } else {
+                                resolveError = "Code not found. Ask peer to tap BROADCAST CODE first."
+                            }
+                        }
+                    },
+                    enabled = linkCodeInput.replace("-", "").length == 8 && !isResolving,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberCyan,
+                        contentColor = CyberBlack,
+                        disabledContainerColor = CyberCyan.copy(alpha = 0.2f),
+                        disabledContentColor = CyberTextSecondary.copy(alpha = 0.4f)
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    if (isResolving) {
+                        CircularProgressIndicator(
+                            color = CyberBlack,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        if (isResolving) "RESOLVING..." else "FIND PEER",
+                        fontFamily = MonospaceFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CyberSurface)
+                        .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                        .padding(14.dp)
+                ) {
+                    Text("HOW LINK CODES WORK", color = CyberCyan, fontSize = 10.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "1. Tell your peer your 8-character code verbally, on paper, or in any chat.\n" +
+                        "2. Ask them to tap BROADCAST CODE so the app announces their key.\n" +
+                        "3. Enter their code here and tap FIND PEER.\n" +
+                        "4. Codes expire every 10 minutes. Safe to share anywhere.",
+                        color = CyberTextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
         } else {
-            // Tab 1: SCAN QR CODE
+            // Tab 2: SCAN QR CODE
             var qrScanSuccess by remember { mutableStateOf(false) }
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -2127,6 +2527,15 @@ fun AddContactScreen(
             myName = myName
         )
     }
+
+    if (showQrDialog) {
+        StandaloneQrDialog(
+            isOpen = true,
+            onClose = { showQrDialog = false },
+            myPublicKey = myPublicKey,
+            myName = myName
+        )
+    }
 }
 
 @Composable
@@ -2144,6 +2553,7 @@ fun ProfileScreen(
     var isEditingName by remember { mutableStateOf(false) }
     var editingNameValue by remember { mutableStateOf("") }
     var showShareDialog by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? Activity
@@ -2381,6 +2791,20 @@ fun ProfileScreen(
                             Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberBlack)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("SHARE MY SPHERE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = { showQrDialog = true },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, tint = CyberCyan)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("SHOW QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -2766,6 +3190,17 @@ fun ProfileScreen(
                 ShareMySphereDialog(
                     isOpen = true,
                     onClose = { showShareDialog = false },
+                    myPublicKey = self.publicKey ?: "",
+                    myName = self.displayName
+                )
+            }
+        }
+
+        if (showQrDialog) {
+            identity?.let { self ->
+                StandaloneQrDialog(
+                    isOpen = true,
+                    onClose = { showQrDialog = false },
                     myPublicKey = self.publicKey ?: "",
                     myName = self.displayName
                 )
