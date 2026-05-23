@@ -1540,8 +1540,19 @@ fun AddContactScreen(
 ) {
     var linkCodeInput by remember { mutableStateOf("") }
     var isResolving by remember { mutableStateOf(false) }
-    var resolveError by remember { mutableStateOf<String?>("") }
-    if (resolveError == "") resolveError = null // hack for nullability type
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showScanner by remember { mutableStateOf(false) }
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.CAMERA
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val cameraPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> hasCameraPermission = granted; if (granted) showScanner = true }
 
     // Use a local state for resolve error to avoid type mismatches
     var actualResolveError: String? by remember { mutableStateOf(null) }
@@ -1678,7 +1689,7 @@ fun AddContactScreen(
                     }
                 }
             },
-            enabled = linkCodeInput.replace("-", "").length == 8 && !isResolving,
+            enabled = linkCodeInput.length == 8 && !isResolving,
             colors = ButtonDefaults.buttonColors(
                 containerColor = CyberCyan,
                 contentColor = CyberBlack,
@@ -1744,7 +1755,13 @@ fun AddContactScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = { showQrDialog = true },
+            onClick = {
+                if (hasCameraPermission) {
+                    showScanner = true
+                } else {
+                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                }
+            },
             colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
             shape = RoundedCornerShape(6.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
@@ -1773,6 +1790,65 @@ fun AddContactScreen(
                     myPublicKey = self.publicKey ?: "",
                     myName = self.displayName
                 )
+            }
+        }
+
+        if (showScanner) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CyberBlack)
+            ) {
+                CameraScannerView(
+                    onQrScanned = { qrValue ->
+                        val parsed = parsePhantmSyncUri(qrValue)
+                        if (parsed != null) {
+                            val (key, name) = parsed
+                            viewModel.addContact(key, name)
+                            viewModel.sendHandshakeIntro(key)
+                            showScanner = false
+                            onContactLinked(key)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Close button
+                IconButton(
+                    onClick = { showScanner = false },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close scanner",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                // Scan guide text
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 64.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Point camera at peer's QR code",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Ask them to open Identity → Share QR",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }

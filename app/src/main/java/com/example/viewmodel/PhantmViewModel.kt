@@ -83,6 +83,15 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         _appIsLocked.value = false
     }
 
+    /**
+     * Verifies the App Lock PIN.
+     * TODO: implement proper PIN storage and setup UI.
+     * Currently accepts any 4-digit input to unblock (acts as acknowledgement lock).
+     */
+    fun verifyAppLockPin(pin: String): Boolean {
+        return pin.length == 4
+    }
+
 
     // Core Identity Settings Flow
     val identitySettings: StateFlow<IdentitySettings?> = identityDao.getIdentityFlow()

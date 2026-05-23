@@ -108,6 +108,7 @@ fun PhantmAppContainer(
 ) {
     val identityState by viewModel.identitySettings.collectAsStateWithLifecycle()
     val toastState by viewModel.toastState.collectAsStateWithLifecycle()
+    val appIsLocked by viewModel.appIsLocked.collectAsStateWithLifecycle()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
     var activeTab by remember { mutableStateOf(DashboardTab.Chats) }
@@ -256,7 +257,90 @@ fun PhantmAppContainer(
             )
         }
 
+        // App Lock overlay — shown when user backgrounds the app with App Lock enabled
+        if (appIsLocked) {
+            var lockPin by remember { mutableStateOf("") }
+            var lockPinError by remember { mutableStateOf(false) }
 
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CyberBlack),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = CyberCyan,
+                        modifier = Modifier.size(52.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Phantm locked",
+                        color = CyberTextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Enter your PIN to continue",
+                        color = CyberTextSecondary,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                    OutlinedTextField(
+                        value = lockPin,
+                        onValueChange = {
+                            lockPin = it.filter { ch -> ch.isDigit() }.take(4)
+                            lockPinError = false
+                            if (lockPin.length == 4) {
+                                if (viewModel.verifyAppLockPin(lockPin)) {
+                                    viewModel.unlockApp()
+                                    lockPin = ""
+                                } else {
+                                    lockPinError = true
+                                }
+                            }
+                        },
+                        placeholder = {
+                            Text(
+                                "4-digit PIN",
+                                color = CyberTextSecondary.copy(alpha = 0.5f)
+                            )
+                        },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = if (lockPinError) CyberRed else CyberCyan,
+                            unfocusedBorderColor = if (lockPinError) CyberRed else CyberBorder,
+                            cursorColor = CyberCyan
+                        ),
+                        isError = lockPinError,
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (lockPinError) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Incorrect PIN",
+                            color = CyberRed,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
