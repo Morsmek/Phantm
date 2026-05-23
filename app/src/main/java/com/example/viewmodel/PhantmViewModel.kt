@@ -485,7 +485,14 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                         val event = outerJson.optString("event")
                         if (event == "message") {
                             val msgText = outerJson.optString("message")
-                            val innerJson = JSONObject(msgText)
+                            // Unwrap the ntfy storage layer to get the actual payload
+                            val actualPayload = try {
+                                val wrapper = JSONObject(msgText)
+                                wrapper.optString("message").ifBlank { msgText }
+                            } catch (e: Exception) {
+                                msgText
+                            }
+                            val innerJson = try { JSONObject(actualPayload) } catch (e: Exception) { return }
                             val senderId = innerJson.optString("senderId")
                             val senderName = innerJson.optString("senderName")
                             val msgId = innerJson.optString("msgId")
@@ -686,7 +693,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                     .readTimeout(35, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
 
-                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=10m"
+                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=all"
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 val body = response.body?.string() ?: ""
@@ -699,7 +706,16 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                         val obj = JSONObject(line)
                         val msgText = obj.optString("message")
                         if (msgText.isBlank()) continue
-                        val inner = JSONObject(msgText)
+                        // ntfy stores our {"message": "<payload>"} wrapper as the message field
+                        // so msgText is itself a JSON object with a nested "message" key
+                        val actualPayload = try {
+                            val wrapper = JSONObject(msgText)
+                            wrapper.optString("message").ifBlank { msgText }
+                        } catch (e: Exception) {
+                            msgText  // fallback: treat as direct payload
+                        }
+                        if (actualPayload.isBlank()) continue
+                        val inner = try { JSONObject(actualPayload) } catch (e: Exception) { continue }
                         if (inner.optString("type") != "link_code_broadcast") continue
                         val broadcastCode = inner.optString("linkCode")
                         val broadcastKey = inner.optString("publicKey")
