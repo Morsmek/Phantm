@@ -83,28 +83,6 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         _appIsLocked.value = false
     }
 
-    // Secure screen session block state (Profile biometric code logic)
-    private val _bioVerified = MutableStateFlow(false)
-    val bioVerified: StateFlow<Boolean> = _bioVerified.asStateFlow()
-
-    fun verifyBioPin(pin: String): Boolean {
-        // In debug builds, accept the demo PIN 1337 or any 4-digit code for convenience.
-        // In release builds, only accept the stored pinCode, falling back to 1337 if unset.
-        val storedPin = identitySettings.value?.pinCode
-        val isValid = if (BuildConfig.DEBUG) {
-            pin == "1337" || pin.length == 4
-        } else {
-            pin == (storedPin ?: "1337")
-        }
-        if (isValid) {
-            _bioVerified.value = true
-        }
-        return isValid
-    }
-
-    fun lockBio() {
-        _bioVerified.value = false
-    }
 
     // Core Identity Settings Flow
     val identitySettings: StateFlow<IdentitySettings?> = identityDao.getIdentityFlow()
@@ -283,11 +261,14 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             val ourPublicKey = settings.publicKey ?: return@launch
             try {
                 val payload = JSONObject().apply {
-                    put("type", "handshake_intro")
-                    put("senderId", ourPublicKey)
-                    put("senderName", settings.displayName)
-                    put("msgId", UUID.randomUUID().toString())
-                    put("timestamp", System.currentTimeMillis())
+                    val inner = JSONObject().apply {
+                        put("type", "handshake_intro")
+                        put("senderId", ourPublicKey)
+                        put("senderName", settings.displayName)
+                        put("msgId", UUID.randomUUID().toString())
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    put("message", inner.toString())
                 }.toString()
                 val url = "https://ntfy.sh/phantm_peer_$targetPublicKey"
                 val request = Request.Builder()
@@ -342,20 +323,23 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                 try {
                     val client = httpClient
                     val payload = JSONObject().apply {
-                        put("senderId", ourPublicKey)
-                        put("senderName", ourDisplayName)
-                        put("msgId", msgId)
-                        put("timestamp", System.currentTimeMillis())
-                        
-                        if (!passphrase.isNullOrBlank()) {
-                            val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
-                            val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
-                            put("ciphertext", encryptedData.ciphertext)
-                            put("iv", encryptedData.iv)
-                            put("hmac", encryptedData.hmac)
-                        } else {
-                            put("content", content)
+                        val inner = JSONObject().apply {
+                            put("senderId", ourPublicKey)
+                            put("senderName", ourDisplayName)
+                            put("msgId", msgId)
+                            put("timestamp", System.currentTimeMillis())
+                            
+                            if (!passphrase.isNullOrBlank()) {
+                                val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
+                                val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
+                                put("ciphertext", encryptedData.ciphertext)
+                                put("iv", encryptedData.iv)
+                                put("hmac", encryptedData.hmac)
+                            } else {
+                                put("content", content)
+                            }
                         }
+                        put("message", inner.toString())
                     }.toString()
 
                     val url = "https://ntfy.sh/phantm_peer_$contactId"
@@ -641,11 +625,14 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val client = httpClient
                 val payload = JSONObject().apply {
-                    put("type", "link_code_broadcast")
-                    put("publicKey", publicKey)
-                    put("displayName", settings.displayName)
-                    put("linkCode", code.replace("-", ""))
-                    put("timestamp", System.currentTimeMillis())
+                    val inner = JSONObject().apply {
+                        put("type", "link_code_broadcast")
+                        put("publicKey", publicKey)
+                        put("displayName", settings.displayName)
+                        put("linkCode", code.replace("-", ""))
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    put("message", inner.toString())
                 }.toString()
 
                 val url = "https://ntfy.sh/phantm_broadcasts"

@@ -1,4 +1,4 @@
-﻿@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.screens
 
 import android.app.Activity
@@ -1546,6 +1546,9 @@ fun AddContactScreen(
     // Use a local state for resolve error to avoid type mismatches
     var actualResolveError: String? by remember { mutableStateOf(null) }
 
+    var showShareDialog by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
+
     val identityForCode by viewModel.identitySettings.collectAsStateWithLifecycle()
     val myCode = remember(identityForCode?.publicKey) {
         identityForCode?.publicKey?.let { PhantmLinkCode.generate(it) } ?: "----"
@@ -1644,31 +1647,12 @@ fun AddContactScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedTextField(
-            value = linkCodeInput,
-            onValueChange = {
-                val raw = it.filter { ch -> ch.isLetterOrDigit() }.uppercase().take(8)
-                linkCodeInput = if (raw.length > 4) "$($raw.take(4))-$($raw.drop(4))" else raw
+        LinkCodeInput(
+            code = linkCodeInput,
+            onCodeChange = { 
+                linkCodeInput = it 
                 actualResolveError = null
             },
-            placeholder = { Text("XXXX-XXXX", color = CyberTextSecondary.copy(alpha = 0.4f), fontFamily = MonospaceFontFamily) },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedBorderColor = CyberCyan,
-                unfocusedBorderColor = CyberBorder,
-                focusedContainerColor = CyberCard,
-                unfocusedContainerColor = CyberCard,
-                cursorColor = CyberCyan
-            ),
-            textStyle = TextStyle(
-                fontFamily = MonospaceFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 3.sp,
-                textAlign = TextAlign.Center
-            ),
-            shape = RoundedCornerShape(8.dp),
-            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -1740,6 +1724,57 @@ fun AddContactScreen(
                 lineHeight = 18.sp
             )
         }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text("MORE OPTIONS", color = CyberCyan, fontSize = 11.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Button(
+            onClick = { showShareDialog = true },
+            colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
+        ) {
+            Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberCyan)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("SHARE MY QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { showQrDialog = true },
+            colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
+        ) {
+            Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = CyberCyan)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("SCAN QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+        }
+
+        if (showShareDialog) {
+            identityForCode?.let { self ->
+                ShareMySphereDialog(
+                    isOpen = true,
+                    onClose = { showShareDialog = false },
+                    myPublicKey = self.publicKey ?: "",
+                    myName = self.displayName
+                )
+            }
+        }
+
+        if (showQrDialog) {
+            identityForCode?.let { self ->
+                StandaloneQrDialog(
+                    isOpen = true,
+                    onClose = { showQrDialog = false },
+                    myPublicKey = self.publicKey ?: "",
+                    myName = self.displayName
+                )
+            }
+        }
     }
 }
 
@@ -1749,37 +1784,19 @@ fun ProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val identity by viewModel.identitySettings.collectAsStateWithLifecycle()
-    val isVerified by viewModel.bioVerified.collectAsStateWithLifecycle()
     val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
-
-    var showPinDialog by remember { mutableStateOf(false) }
-    var pinValue by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf(false) }
 
     var isEditingName by remember { mutableStateOf(false) }
     var editingNameValue by remember { mutableStateOf("") }
     var showShareDialog by remember { mutableStateOf(false) }
-    var showQrDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? Activity
-
-    // Toggle FLAG_SECURE locally on the system window of current activity
-    // whenever they enter or leave a session on viewing recovery seeds!
-    LaunchedEffect(isVerified) {
-        if (isVerified) {
-            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            viewModel.showToast("Secure Display On: Screenshot blocked", "info")
-        } else {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-    }
 
     // Clean up window secure flags on Composable disposal
     DisposableEffect(Unit) {
         onDispose {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            viewModel.lockBio()
         }
     }
 
@@ -1902,36 +1919,7 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        Spacer(modifier = Modifier.height(16.dp))
 
-                        Button(
-                            onClick = { showShareDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                        ) {
-                            Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberBlack)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("SHARE MY QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedButton(
-                            onClick = { showQrDialog = true },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberCyan),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.fillMaxWidth().height(50.dp)
-                        ) {
-                            Icon(Icons.Default.QrCode2, contentDescription = null, tint = CyberCyan)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("SHOW QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
 
                         // Share details card
                         Column(
@@ -2022,124 +2010,77 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(32.dp))
 
                         // Recovery credentials / Private keys
-                        if (isVerified) {
+                        // Recovery seed — shown directly, protected by device lock and app lock
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Warning box
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            ) {
-                                // Updated red warning box layout
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(CyberSurface)
-                                        .border(1.dp, CyberRed, RoundedCornerShape(8.dp))
-                                        .padding(16.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Warning,
-                                            contentDescription = null,
-                                            tint = CyberRed,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = "SCREEN SECURED - FLAG_SECURE ON",
-                                            color = CyberRed,
-                                            fontSize = 11.sp,
-                                            fontFamily = MonospaceFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 1.sp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = "System is running under screenshot prevention flag. Never share your recovery seed phrase with anyone.",
-                                        color = CyberTextSecondary,
-                                        fontSize = 11.sp,
-                                        lineHeight = 16.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(20.dp))
-
-                                // Word chips grid with cyan index numbers and greyed background words
-                                self.mnemonic?.let { phrase ->
-                                    val words = phrase.split(" ")
-                                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .wrapContentHeight()
-                                    ) {
-                                        items(words.size) { index ->
-                                            WordChip(number = index + 1, word = words[index])
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                Button(
-                                    onClick = { viewModel.lockBio() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyberBorder, contentColor = Color.White),
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(48.dp)
-                                ) {
-                                    Text("HIDE PRIVATE KEY", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        } else {
-                            // Recovery Seed Archive locked card
-                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(CyberSurface)
-                                    .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
-                                    .padding(24.dp),
-                                contentAlignment = Alignment.Center
+                                    .border(1.dp, CyberRed, RoundedCornerShape(8.dp))
+                                    .padding(16.dp)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Lock,
+                                        imageVector = Icons.Default.Warning,
                                         contentDescription = null,
-                                        tint = CyberCyan.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(48.dp)
+                                        tint = CyberRed,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "RECOVERY SEED ARCHIVE LOCKED",
-                                        color = CyberTextPrimary,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = MonospaceFontFamily
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = "Authentication required to expose recovery credentials.",
-                                        color = CyberTextSecondary,
+                                        text = "Keep this phrase secret",
+                                        color = CyberRed,
                                         fontSize = 11.sp,
-                                        textAlign = TextAlign.Center
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                    Button(
-                                        onClick = { showPinDialog = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                                        shape = RoundedCornerShape(6.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp)
-                                    ) {
-                                        Text("VIEW RECOVERY SEED", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Anyone with these 12 words can take full control of your identity. Never share them.",
+                                    color = CyberTextSecondary,
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        
+                            Spacer(modifier = Modifier.height(16.dp))
+                        
+                            // Mnemonic word grid
+                            self.mnemonic?.let { phrase ->
+                                val words = phrase.split(" ")
+                                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight()
+                                ) {
+                                    items(words.size) { index ->
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(CyberCard)
+                                                .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${index + 1}",
+                                                color = CyberCyan,
+                                                fontSize = 9.sp,
+                                                fontFamily = MonospaceFontFamily,
+                                                modifier = Modifier.width(16.dp)
+                                            )
+                                            Text(
+                                                text = words[index],
+                                                color = CyberTextPrimary,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2232,104 +2173,11 @@ fun ProfileScreen(
             }
         }
 
-        // Bio PIN verification dialogues
-        if (showPinDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    showPinDialog = false
-                    pinValue = ""
-                    pinError = false
-                },
-                containerColor = CyberSurface,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.border(1.dp, CyberBorder, RoundedCornerShape(16.dp)),
-                title = {
-                    Text(
-                        text = "SECURITY CHECK",
-                        color = CyberCyan,
-                        fontSize = 14.sp,
-                        fontFamily = MonospaceFontFamily,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Please enter your security PIN to view sensitive account credentials.",
-                            color = CyberTextSecondary,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                        OutlinedTextField(
-                            value = pinValue,
-                            onValueChange = { pinValue = it.filter { ch -> ch.isDigit() }.take(4) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = CyberCyan,
-                                unfocusedBorderColor = CyberBorder,
-                                cursorColor = CyberCyan
-                            ),
-                            prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
-                            label = { Text("Enter 4-digit PIN", color = CyberCyan) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (pinError) {
-                            Text(
-                                text = "Validation error: Input correct PIN code",
-                                color = CyberRed,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (viewModel.verifyBioPin(pinValue)) {
-                                showPinDialog = false
-                                pinValue = ""
-                                pinError = false
-                            } else {
-                                pinError = true
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack)
-                    ) {
-                        Text("VERIFY")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showPinDialog = false
-                        pinValue = ""
-                        pinError = false
-                    }) {
-                        Text("CANCEL", color = CyberTextSecondary)
-                    }
-                }
-            )
-        }
-
         if (showShareDialog) {
             identity?.let { self ->
                 ShareMySphereDialog(
                     isOpen = true,
                     onClose = { showShareDialog = false },
-                    myPublicKey = self.publicKey ?: "",
-                    myName = self.displayName
-                )
-            }
-        }
-
-        if (showQrDialog) {
-            identity?.let { self ->
-                StandaloneQrDialog(
-                    isOpen = true,
-                    onClose = { showQrDialog = false },
                     myPublicKey = self.publicKey ?: "",
                     myName = self.displayName
                 )
@@ -2569,3 +2417,58 @@ fun SettingsScreen(
     }
 }
 
+@Composable
+fun LinkCodeInput(
+    code: String,
+    onCodeChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Strip hyphens for state logic
+    val cleanCode = code.replace("-", "").take(8)
+
+    androidx.compose.foundation.text.BasicTextField(
+        value = cleanCode,
+        onValueChange = { newValue ->
+            val filtered = newValue.filter { it.isLetterOrDigit() }.uppercase().take(8)
+            onCodeChange(filtered)
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+        decorationBox = {
+            Row(
+                modifier = modifier,
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (i in 0 until 8) {
+                    val char = cleanCode.getOrNull(i)?.toString() ?: ""
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp, 48.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (char.isNotEmpty()) CyberSurface else CyberCard)
+                            .border(1.dp, if (char.isNotEmpty()) CyberCyan else CyberBorder, RoundedCornerShape(6.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = char,
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontFamily = MonospaceFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (i == 3) {
+                        Text(
+                            text = "-",
+                            color = CyberTextSecondary,
+                            fontSize = 20.sp,
+                            fontFamily = MonospaceFontFamily,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    )
+}

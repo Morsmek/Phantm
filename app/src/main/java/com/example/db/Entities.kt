@@ -10,7 +10,6 @@ data class IdentitySettings(
     val publicKey: String? = null,
     val displayName: String = "Chosen Cipher",
     val isOnboarded: Boolean = false,
-    val pinCode: String? = null, // pin code input for view recovery / app lock
     val appLockEnabled: Boolean = false,
     val notificationsEnabled: Boolean = true,
     val showNotificationPreview: Boolean = true,

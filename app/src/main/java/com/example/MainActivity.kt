@@ -108,7 +108,6 @@ fun PhantmAppContainer(
 ) {
     val identityState by viewModel.identitySettings.collectAsStateWithLifecycle()
     val toastState by viewModel.toastState.collectAsStateWithLifecycle()
-    val appIsLocked by viewModel.appIsLocked.collectAsStateWithLifecycle()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
     var activeTab by remember { mutableStateOf(DashboardTab.Chats) }
@@ -257,9 +256,7 @@ fun PhantmAppContainer(
             )
         }
 
-        if (appIsLocked) {
-            AppLockOverlay(viewModel = viewModel)
-        }
+
     }
 }
 
@@ -337,8 +334,7 @@ fun CustomNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .background(CyberBlack)
-            .windowInsetsPadding(WindowInsets.navigationBars) // Essential adaptive notch padding!
-            .height(64.dp)
+            .wrapContentHeight()
             .drawBehind {
                 // Top border stroke
                 drawLine(
@@ -347,7 +343,8 @@ fun CustomNavigationBar(
                     end = Offset(size.width, 0f),
                     strokeWidth = 1.dp.toPx()
                 )
-            },
+            }
+            .windowInsetsPadding(WindowInsets.navigationBars),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val tabItems = listOf(
@@ -364,7 +361,7 @@ fun CustomNavigationBar(
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onTabChange(item.tab) }
-                    .padding(vertical = 8.dp),
+                    .padding(top = 10.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -382,147 +379,6 @@ fun CustomNavigationBar(
                     fontFamily = MonospaceFontFamily,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun AppLockOverlay(
-    viewModel: PhantmViewModel,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var pin by remember { mutableStateOf("") }
-    var errorState by remember { mutableStateOf(false) }
-
-    BackHandler(enabled = true) {
-        (context as? Activity)?.finish()
-    }
-
-    LaunchedEffect(pin) {
-        if (pin.length == 4) {
-            val success = viewModel.verifyBioPin(pin)
-            if (success) {
-                viewModel.unlockApp()
-            } else {
-                errorState = true
-                viewModel.showToast("ACCESS DENIED: INVALID KEY CODE", "error")
-                kotlinx.coroutines.delay(1000)
-                pin = ""
-                errorState = false
-            }
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(CyberBlack)
-            .clickable(enabled = false) {}, // Intercept touch events
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = "App Locked",
-                tint = if (errorState) CyberRed else CyberCyan,
-                modifier = Modifier.size(64.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "PHANTM PROTOCOL SECURED",
-                color = if (errorState) CyberRed else CyberCyan,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "ENTER DECRYPTION PIN",
-                color = CyberTextSecondary,
-                fontFamily = MonospaceFontFamily,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // PIN dot indicators
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(4) { index ->
-                    val active = index < pin.length
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (active) (if (errorState) CyberRed else CyberCyan) else Color.Transparent
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = if (errorState) CyberRed else CyberCyan,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Keypad
-            val keys = listOf(
-                listOf("1", "2", "3"),
-                listOf("4", "5", "6"),
-                listOf("7", "8", "9"),
-                listOf("", "0", "CLEAR")
-            )
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                keys.forEach { row ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        row.forEach { key ->
-                            if (key.isEmpty()) {
-                                Spacer(modifier = Modifier.size(72.dp))
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(CyberSurface)
-                                        .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            if (key == "CLEAR") {
-                                                if (pin.isNotEmpty()) pin = pin.dropLast(1)
-                                            } else if (pin.length < 4) {
-                                                pin += key
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = key,
-                                        color = if (key == "CLEAR") CyberRed else CyberTextPrimary,
-                                        fontFamily = MonospaceFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = if (key == "CLEAR") 12.sp else 24.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
