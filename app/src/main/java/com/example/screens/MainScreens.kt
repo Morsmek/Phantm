@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.font.FontFamily
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -116,64 +118,119 @@ fun ChatsListScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             PhantmScreenHeader(title = "Chats", trailingContent = { E2eeBadge() })
 
-            // Cyber search bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search conversations...", color = CyberTextSecondary.copy(alpha = 0.5f)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CyberCyan) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = null, tint = CyberTextSecondary)
-                        }
-                    }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = CyberCyan,
-                    unfocusedBorderColor = CyberBorder,
-                    focusedContainerColor = CyberCard,
-                    unfocusedContainerColor = CyberCard,
-                    cursorColor = CyberCyan
-                ),
-                prefix = { Text("> ", color = CyberCyan, fontFamily = MonospaceFontFamily) },
-                shape = RoundedCornerShape(12.dp),
+            // Minimalist bottom-line search
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp).padding(bottom = 12.dp)
-                    .testTag("chats_search_input")
-            )
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 8.dp)
+            ) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    textStyle = TextStyle(
+                        color = CyberTextPrimary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.W300,
+                        letterSpacing = 2.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(CyberCyan),
+                    singleLine = true,
+                    decorationBox = { innerTextField ->
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "SEARCH CONVERSATIONS",
+                                        color = CyberTextTertiary,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.W300,
+                                        letterSpacing = 2.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                innerTextField()
+                            }
+                            // Bottom hairline — animates width on focus
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(0.5.dp)
+                                    .background(CyberBorderMid)
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             // Dynamic conversation items stream
             if (filteredChats.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.ChatBubbleOutline,
-                            contentDescription = null,
-                            tint = CyberBorder,
-                            modifier = Modifier.size(64.dp)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Large ghost icon with ambient glow
+                        Box(contentAlignment = Alignment.Center) {
+                            // Glow bloom
+                            Box(
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.radialGradient(
+                                            colors = listOf(
+                                                CyberCyan.copy(alpha = 0.04f),
+                                                Color.Transparent
+                                            )
+                                        ),
+                                        CircleShape
+                                    )
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = CyberTextTertiary.copy(alpha = 0.15f),
+                                modifier = Modifier.size(72.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "CHATS",
+                            color = CyberTextPrimary,
+                            fontSize = 20.sp,
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.W100,
+                            letterSpacing = 8.sp
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "NO SECURE REPLIES FOUND",
-                            color = CyberTextSecondary,
-                            fontSize = 12.sp,
-                            fontFamily = MonospaceFontFamily,
-                            fontWeight = FontWeight.Bold
+                            color = CyberCyan.copy(alpha = 0.4f),
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.W300,
+                            letterSpacing = 3.sp
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Link a contact node to initiate handshake.",
-                            color = CyberTextSecondary.copy(alpha = 0.6f),
-                            fontSize = 11.sp
+                            text = "LINK A CONTACT NODE TO INITIATE HANDSHAKE",
+                            color = CyberTextTertiary.copy(alpha = 0.5f),
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.W300,
+                            letterSpacing = 2.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 40.dp)
                         )
                     }
                 }
@@ -195,17 +252,27 @@ fun ChatsListScreen(
         }
 
         // Cyber FAB corresponding to start chats flow
-        FloatingActionButton(
-            onClick = { showNewChatDialog = true },
-            containerColor = CyberCyan,
-            contentColor = CyberBlack,
-            shape = RoundedCornerShape(12.dp),
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(24.dp)
-                .testTag("new_chat_fab")
+                .size(56.dp)
+                .border(
+                    width = 0.5.dp,
+                    color = CyberCyan.copy(alpha = 0.2f),
+                    shape = CircleShape
+                )
+                .clip(CircleShape)
+                .clickable { showNewChatDialog = true }
+                .testTag("new_chat_fab"),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Add, contentDescription = "New chat node")
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "New chat node",
+                tint = CyberCyan.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
+            )
         }
 
         // New Chat Dialog Popup
@@ -314,18 +381,30 @@ fun ConversationItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = { onClick() },
-                onLongClick = { showActionSheet = true }
-            )
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .combinedClickable(onClick = onClick, onLongClick = { showActionSheet = true })
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Avatar(name = conversation.contactName, size = 48.dp)
+        // Avatar — minimal outlined circle
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .border(0.5.dp, CyberBorderMid, CircleShape)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = conversation.contactName.take(2).uppercase(),
+                color = CyberCyan.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.W300,
+                letterSpacing = 1.sp
+            )
+        }
 
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -333,93 +412,82 @@ fun ConversationItem(
                 Text(
                     text = conversation.contactName,
                     color = CyberTextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (conversation.isEncrypted) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "End-to-End Encrypted",
-                        tint = CyberCyan,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                val formatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-                val timeStr = remember(conversation.lastMessageAt) { formatter.format(Date(conversation.lastMessageAt)) }
-                Text(
-                    text = timeStr,
-                    color = CyberTextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = MonospaceFontFamily
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = conversation.lastMessagePreview,
-                    color = if (conversation.unreadCount > 0) CyberCyan else CyberTextSecondary,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.W300,
+                    letterSpacing = 0.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-
+                val formatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+                val timeStr = remember(conversation.lastMessageAt) {
+                    formatter.format(Date(conversation.lastMessageAt))
+                }
+                Text(
+                    text = timeStr,
+                    color = CyberTextTertiary,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (conversation.isEncrypted) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = CyberCyan.copy(alpha = 0.3f),
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+                Text(
+                    text = conversation.lastMessagePreview,
+                    color = if (conversation.unreadCount > 0)
+                        CyberTextSecondary
+                    else
+                        CyberTextTertiary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.W200,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
                 if (conversation.unreadCount > 0) {
                     Box(
                         modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(CyberCyan),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = conversation.unreadCount.toString(),
-                            color = CyberBlack,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = MonospaceFontFamily
-                        )
-                    }
+                            .size(5.dp)
+                            .background(CyberCyan, CircleShape)
+                    )
                 }
             }
         }
     }
 
-    // Long press sheet options
-    PhantmBottomSheet(
-        isOpen = showActionSheet,
-        onClose = { showActionSheet = false },
-        title = "SECURE CHANNEL CONTROLS"
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    onDelete()
-                    showActionSheet = false
-                }
-                .padding(vertical = 14.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+    // Thin hairline separator
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .padding(horizontal = 74.dp)  // Indented — doesn't reach edge
+            .background(CyberBorder)
+    )
+
+    if (showActionSheet) {
+        PhantmBottomSheet(
+            isOpen = true,
+            onClose = { showActionSheet = false },
+            title = "CONTACT OPTIONS"
         ) {
-            Icon(Icons.Default.Delete, contentDescription = null, tint = CyberRed)
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = "TRUNCATE CHANNEL & PURGE DATA",
-                color = CyberRed,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                fontFamily = MonospaceFontFamily
-            )
+            TextButton(
+                onClick = { onDelete(); showActionSheet = false },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("DELETE CONTACT", color = CyberRed, letterSpacing = 2.sp, fontSize = 11.sp)
+            }
         }
     }
 }
@@ -1371,8 +1439,7 @@ fun ShareMySphereDialog(
 
                 Button(
                     onClick = onClose,
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                    shape = RoundedCornerShape(6.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                     modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {
                     Text("CLOSE TRANSMISSION", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
@@ -1511,8 +1578,7 @@ fun StandaloneQrDialog(
                             }
                             context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Phantm Link"))
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -1638,8 +1704,7 @@ fun AddContactScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { viewModel.broadcastLinkCode() },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                shape = RoundedCornerShape(6.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                 modifier = Modifier.fillMaxWidth().height(44.dp)
             ) {
                 Text("BROADCAST MY CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1743,8 +1808,7 @@ fun AddContactScreen(
         
         Button(
             onClick = { showQrDialog = true },
-            colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
-            shape = RoundedCornerShape(6.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
         ) {
             Icon(Icons.Default.QrCode, contentDescription = null, tint = CyberCyan)
@@ -1762,8 +1826,7 @@ fun AddContactScreen(
                     cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
                 }
             },
-            colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
-            shape = RoundedCornerShape(6.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
         ) {
             Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = CyberCyan)
@@ -2041,9 +2104,7 @@ fun ProfileScreen(
                                             viewModel.showToast("Full details copied to clipboard", "success")
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyberSurface, contentColor = CyberCyan),
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                                     modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(14.dp))
@@ -2063,8 +2124,7 @@ fun ProfileScreen(
                                             context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Phantm Details"))
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
-                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                                     modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Icon(Icons.Default.Share, contentDescription = null, tint = CyberBlack, modifier = Modifier.size(14.dp))
@@ -2413,8 +2473,7 @@ fun SettingsScreen(
 
             Button(
                 onClick = { showWipeConfirm = true },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberRed, contentColor = Color.White),
-                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)

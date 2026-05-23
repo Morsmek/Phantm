@@ -1,5 +1,8 @@
 package com.example.components
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -8,6 +11,10 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -60,55 +67,70 @@ fun PhantmNavigationBar(
     onTabSelected: (DashboardTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    NavigationBar(
+    val tabs = listOf(
+        Triple(DashboardTab.Chats,    Icons.Outlined.ChatBubbleOutline, "CHATS"),
+        Triple(DashboardTab.Contacts, Icons.Outlined.PeopleOutline,     "CONTACTS"),
+        Triple(DashboardTab.Profile,  Icons.Outlined.Fingerprint, "IDENTITY"),
+        Triple(DashboardTab.Settings, Icons.Outlined.Settings,          "SETTINGS")
+    )
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .background(CyberBlack)
+            .background(Color(0xE6000000))  // 90% black
             .drawBehind {
-                drawRect(
-                    color = CyberCyan.copy(alpha = 0.08f),
-                    topLeft = Offset(0f, 0f),
-                    size = Size(size.width, 2.dp.toPx())
+                drawLine(
+                    color = Color(0x0D00DBE9),  // 5% cyan hairline
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 0.5.dp.toPx()
                 )
             }
             .windowInsetsPadding(WindowInsets.navigationBars),
-        containerColor = CyberBlack,
-        contentColor = CyberCyan
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        DashboardTab.values().forEach { tab ->
-            val icon = when (tab) {
-                DashboardTab.Chats -> Icons.Default.ChatBubble
-                DashboardTab.Contacts -> Icons.Default.People
-                DashboardTab.Profile -> Icons.Default.Lock
-                DashboardTab.Settings -> Icons.Default.Settings
-            }
-            val label = when (tab) {
-                DashboardTab.Chats -> "Chats"
-                DashboardTab.Contacts -> "Contacts"
-                DashboardTab.Profile -> "Identity"
-                DashboardTab.Settings -> "Settings"
-            }
-            NavigationBarItem(
-                selected = selectedTab == tab,
-                onClick = { onTabSelected(tab) },
-                icon = { Icon(icon, contentDescription = label) },
-                label = {
-                    Text(
-                        label.uppercase(),
-                        fontFamily = MonospaceFontFamily,
-                        fontSize = 10.sp,
-                        letterSpacing = 1.sp
+        tabs.forEach { (tab, icon, label) ->
+            val isActive = selectedTab == tab
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onTabSelected(tab) }
+                    .padding(top = 12.dp, bottom = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    // Bloom layer
+                    if (isActive) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = CyberCyan.copy(alpha = 0.2f),
+                            modifier = Modifier.size(28.dp)  // Larger = bloom spread
+                        )
+                    }
+                    // Sharp layer
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = if (isActive) CyberCyan else CyberTextSecondary.copy(alpha = 0.25f),
+                        modifier = Modifier.size(20.dp)
                     )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = CyberCyan,
-                    selectedTextColor = CyberCyan,
-                    unselectedIconColor = CyberTextSecondary,
-                    unselectedTextColor = CyberTextSecondary,
-                    indicatorColor = CyberCyan.copy(alpha = 0.12f)
+                }
+                Text(
+                    text = label,
+                    color = if (isActive) CyberCyan else Color.Transparent,
+                    fontSize = 7.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.W300,
+                    letterSpacing = 1.5.sp
                 )
-            )
+            }
         }
     }
 }
@@ -117,32 +139,58 @@ fun PhantmNavigationBar(
 fun PhantmScreenHeader(
     title: String,
     modifier: Modifier = Modifier,
-    trailingContent: @Composable (() -> Unit)? = null
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(CyberBlack)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .height(72.dp)
+            .background(Color(0x66000000))  // 40% black — matches reference backdrop-blur
+            .drawBehind {
+                drawLine(
+                    color = Color(0x0D00DBE9),  // 5% cyan hairline bottom border
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 0.5.dp.toPx()
+                )
+            }
+            .statusBarsPadding()
     ) {
+        // Logo centred
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            PhantmLogo(showText = true, size = 24.dp)
-            if (trailingContent != null) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = R.drawable.logo_icon),
+                contentDescription = "Phantm",
+                modifier = Modifier.size(28.dp)
+            )
+        }
+
+        // Screen title — far left, bottom-aligned
+        Text(
+            text = title.uppercase(),
+            color = CyberTextPrimary,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.W300,
+            letterSpacing = 3.sp,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, bottom = 8.dp)
+        )
+
+        // Trailing content — far right, centred vertically
+        if (trailingContent != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp)
+            ) {
                 trailingContent()
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            title.uppercase(),
-            color = CyberTextPrimary,
-            fontFamily = MonospaceFontFamily,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 4.sp
-        )
     }
 }

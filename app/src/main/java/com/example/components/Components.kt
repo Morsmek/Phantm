@@ -81,9 +81,9 @@ fun WordChip(
 }
 
 fun Modifier.drawDotGrid(
-    dotColor: Color = CyberDotColor,
-    gridSize: Dp = 16.dp,
-    dotRadius: Dp = 1.dp
+    dotColor: Color = CyberDotColor,   // Now 3% opacity — barely visible
+    gridSize: Dp = 40.dp,              // Wider grid = less dense = more minimal
+    dotRadius: Dp = 0.75.dp            // Smaller dots
 ) = drawBehind {
     val sizePx = gridSize.toPx()
     val radiusPx = dotRadius.toPx()
@@ -109,17 +109,25 @@ fun Modifier.drawDotGrid(
 fun E2eeBadge(
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Row(
         modifier = modifier
-            .border(1.dp, CyberCyan, RoundedCornerShape(4.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .border(0.5.dp, CyberCyan.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(4.dp)
+                .background(CyberCyan, CircleShape)
+        )
         Text(
-            text = "E2EE ON",
-            color = CyberCyan,
-            fontSize = 10.sp,
-            fontFamily = MonospaceFontFamily,
-            fontWeight = FontWeight.Bold
+            text = "E2EE",
+            color = CyberCyan.copy(alpha = 0.6f),
+            fontSize = 8.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.W300,
+            letterSpacing = 1.5.sp
         )
     }
 }
