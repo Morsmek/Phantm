@@ -1852,7 +1852,6 @@ fun ProfileScreen(
 
     var isEditingName by remember { mutableStateOf(false) }
     var editingNameValue by remember { mutableStateOf("") }
-    var showShareDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? Activity
@@ -2237,18 +2236,6 @@ fun ProfileScreen(
                         }
             }
         }
-
-        if (showShareDialog) {
-            val self = identity
-            if (self != null) {
-                ShareMySphereDialog(
-                    isOpen = true,
-                    onClose = { showShareDialog = false },
-                    myPublicKey = self.publicKey ?: "",
-                    myName = self.displayName
-                )
-            }
-        }
     }
 }
 
@@ -2273,7 +2260,8 @@ fun SettingsScreen(
                 .padding(24.dp)
         ) {
 
-        identity?.let { prefs ->
+        val prefs = identity
+        if (prefs != null) {
             // Section 1: Notifications
             Text(
                 text = "COMMUNICATION PROTOCOL",
