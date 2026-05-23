@@ -686,7 +686,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                     .readTimeout(35, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
 
-                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=600"
+                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=10m"
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 val body = response.body?.string() ?: ""

@@ -1557,7 +1557,6 @@ fun AddContactScreen(
     // Use a local state for resolve error to avoid type mismatches
     var actualResolveError: String? by remember { mutableStateOf(null) }
 
-    var showShareDialog by remember { mutableStateOf(false) }
     var showQrDialog by remember { mutableStateOf(false) }
 
     val identityForCode by viewModel.identitySettings.collectAsStateWithLifecycle()
@@ -1742,7 +1741,7 @@ fun AddContactScreen(
         Spacer(modifier = Modifier.height(8.dp))
         
         Button(
-            onClick = { showShareDialog = true },
+            onClick = { showQrDialog = true },
             colors = ButtonDefaults.buttonColors(containerColor = CyberCard, contentColor = CyberCyan),
             shape = RoundedCornerShape(6.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
@@ -1769,17 +1768,6 @@ fun AddContactScreen(
             Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = CyberCyan)
             Spacer(modifier = Modifier.width(8.dp))
             Text("SCAN QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
-        }
-
-        if (showShareDialog) {
-            identityForCode?.let { self ->
-                ShareMySphereDialog(
-                    isOpen = true,
-                    onClose = { showShareDialog = false },
-                    myPublicKey = self.publicKey ?: "",
-                    myName = self.displayName
-                )
-            }
         }
 
         if (showQrDialog) {
@@ -1897,7 +1885,8 @@ fun ProfileScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-            identity?.let { self ->
+            val self = identity
+            if (self != null) {
                         // token (Identity / QR Code / Public Key)
                         // Central lock icon inside glowing avatar
                         Box(
@@ -2250,7 +2239,8 @@ fun ProfileScreen(
         }
 
         if (showShareDialog) {
-            identity?.let { self ->
+            val self = identity
+            if (self != null) {
                 ShareMySphereDialog(
                     isOpen = true,
                     onClose = { showShareDialog = false },

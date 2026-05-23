@@ -61,7 +61,8 @@ fun PhantmNavigationBar(
 ) {
     NavigationBar(
         modifier = modifier
-            .height(64.dp)
+            .fillMaxWidth()
+            .wrapContentHeight()
             .background(CyberBlack)
             .drawBehind {
                 drawRect(
@@ -69,7 +70,8 @@ fun PhantmNavigationBar(
                     topLeft = Offset(0f, 0f),
                     size = Size(size.width, 2.dp.toPx())
                 )
-            },
+            }
+            .windowInsetsPadding(WindowInsets.navigationBars),
         containerColor = CyberBlack,
         contentColor = CyberCyan
     ) {
@@ -82,7 +84,7 @@ fun PhantmNavigationBar(
             }
             val label = when (tab) {
                 DashboardTab.Chats -> "Chats"
-                DashboardTab.Contacts -> "Peers"
+                DashboardTab.Contacts -> "Contacts"
                 DashboardTab.Profile -> "Identity"
                 DashboardTab.Settings -> "Settings"
             }
@@ -127,7 +129,7 @@ fun PhantmScreenHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PhantmLogo(showText = false)
+            PhantmLogo(showText = true, size = 24.dp)
             if (trailingContent != null) {
                 trailingContent()
             }
