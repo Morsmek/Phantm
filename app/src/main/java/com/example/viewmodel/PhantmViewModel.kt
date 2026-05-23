@@ -43,6 +43,16 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
     private var okHttpClient: okhttp3.OkHttpClient? = null
     private var wsJob: kotlinx.coroutines.Job? = null
 
+    private var rendezvousWs: okhttp3.WebSocket? = null
+    private val _broadcastState = MutableStateFlow<BroadcastState>(BroadcastState.Idle)
+    val broadcastState: StateFlow<BroadcastState> = _broadcastState.asStateFlow()
+
+    sealed class BroadcastState {
+        object Idle : BroadcastState()
+        object Listening : BroadcastState()
+        data class PeerConnected(val name: String) : BroadcastState()
+    }
+
     // Setup global Toast state
     private val _toastState = MutableStateFlow<ToastMessage?>(null)
     val toastState: StateFlow<ToastMessage?> = _toastState.asStateFlow()
@@ -264,32 +274,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun sendHandshakeIntro(targetPublicKey: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val settings = identityDao.getIdentityOnce() ?: return@launch
-            val ourPublicKey = settings.publicKey ?: return@launch
-            try {
-                val payload = JSONObject().apply {
-                    val inner = JSONObject().apply {
-                        put("type", "handshake_intro")
-                        put("senderId", ourPublicKey)
-                        put("senderName", settings.displayName)
-                        put("msgId", UUID.randomUUID().toString())
-                        put("timestamp", System.currentTimeMillis())
-                    }
-                    put("message", inner.toString())
-                }.toString()
-                val url = "https://ntfy.sh/phantm_peer_$targetPublicKey"
-                val request = Request.Builder()
-                    .url(url)
-                    .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
-                    .build()
-                httpClient.newCall(request).execute().close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
+
 
     fun removeContact(id: String) {
         viewModelScope.launch {
@@ -332,29 +317,26 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                 try {
                     val client = httpClient
                     val payload = JSONObject().apply {
-                        val inner = JSONObject().apply {
-                            put("senderId", ourPublicKey)
-                            put("senderName", ourDisplayName)
-                            put("msgId", msgId)
-                            put("timestamp", System.currentTimeMillis())
-                            
-                            if (!passphrase.isNullOrBlank()) {
-                                val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
-                                val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
-                                put("ciphertext", encryptedData.ciphertext)
-                                put("iv", encryptedData.iv)
-                                put("hmac", encryptedData.hmac)
-                            } else {
-                                put("content", content)
-                            }
+                        put("senderId", ourPublicKey)
+                        put("senderName", ourDisplayName)
+                        put("msgId", msgId)
+                        put("timestamp", System.currentTimeMillis())
+                        
+                        if (!passphrase.isNullOrBlank()) {
+                            val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
+                            val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
+                            put("ciphertext", encryptedData.ciphertext)
+                            put("iv", encryptedData.iv)
+                            put("hmac", encryptedData.hmac)
+                        } else {
+                            put("content", content)
                         }
-                        put("message", inner.toString())
                     }.toString()
 
                     val url = "https://ntfy.sh/phantm_peer_$contactId"
                     val request = Request.Builder()
                         .url(url)
-                        .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                        .post(payload.toRequestBody("text/plain".toMediaTypeOrNull()))
                         .build()
 
                     client.newCall(request).execute().use { response ->
@@ -484,15 +466,9 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                         val outerJson = JSONObject(text)
                         val event = outerJson.optString("event")
                         if (event == "message") {
+                            // ntfy stores the raw POST body verbatim — parse it directly, no unwrap layer
                             val msgText = outerJson.optString("message")
-                            // Unwrap the ntfy storage layer to get the actual payload
-                            val actualPayload = try {
-                                val wrapper = JSONObject(msgText)
-                                wrapper.optString("message").ifBlank { msgText }
-                            } catch (e: Exception) {
-                                msgText
-                            }
-                            val innerJson = try { JSONObject(actualPayload) } catch (e: Exception) { return }
+                            val innerJson = try { JSONObject(msgText) } catch (e: Exception) { return }
                             val senderId = innerJson.optString("senderId")
                             val senderName = innerJson.optString("senderName")
                             val msgId = innerJson.optString("msgId")
@@ -627,111 +603,147 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /**
-     * Broadcasts this device's public key + display name tagged with the current
-     * Phantm Link Code to the user's own ntfy.sh topic so a recipient can resolve
-     * the short code to the full key within the 10-minute validity window.
-     */
-    fun broadcastLinkCode() {
+    fun startBroadcast() {
         viewModelScope.launch(Dispatchers.IO) {
             val settings = identityDao.getIdentityOnce() ?: return@launch
-            val publicKey = settings.publicKey ?: return@launch
-            val code = PhantmLinkCode.generate(publicKey)
+            val myPublicKey = settings.publicKey ?: return@launch
+            val myName = settings.displayName
+            val code = PhantmLinkCode.generate(myPublicKey)
+            val topic = PhantmLinkCode.rendezvousTopic(code)
 
-            try {
-                val client = httpClient
-                val payload = JSONObject().apply {
-                    val inner = JSONObject().apply {
-                        put("type", "link_code_broadcast")
-                        put("publicKey", publicKey)
-                        put("displayName", settings.displayName)
-                        put("linkCode", code.replace("-", ""))
-                        put("timestamp", System.currentTimeMillis())
-                    }
-                    put("message", inner.toString())
-                }.toString()
+            // Close any previous rendezvous socket
+            rendezvousWs?.cancel()
 
-                val url = "https://ntfy.sh/phantm_broadcasts"
-                val request = Request.Builder()
-                    .url(url)
-                    .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
-                    .build()
+            val client = OkHttpClient.Builder()
+                .readTimeout(0, TimeUnit.MILLISECONDS)
+                .build()
 
-                client.newCall(request).execute().close()
-                viewModelScope.launch {
-                    showToast("Code broadcasted successfully", "success")
+            val request = Request.Builder()
+                .url("wss://ntfy.sh/$topic/ws")
+                .build()
+
+            rendezvousWs = client.newWebSocket(request, object : WebSocketListener() {
+                override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
+                    viewModelScope.launch { _broadcastState.value = BroadcastState.Listening }
                 }
+
+                override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
+                    try {
+                        val outer = JSONObject(text)
+                        if (outer.optString("event") != "message") return
+                        val body = outer.optString("message")
+                        val hello = JSONObject(body)
+                        if (hello.optString("type") != "rv_hello") return
+
+                        val peerKey = hello.optString("publicKey")
+                        val peerName = hello.optString("displayName")
+                            .ifBlank { "Peer_${peerKey.take(8)}" }
+                        if (peerKey.length != 64) return
+
+                        viewModelScope.launch {
+                            // A saves B as a contact
+                            if (contactDao.getContactOnce(peerKey) == null) {
+                                contactDao.insertContact(ContactEntity(id = peerKey, name = peerName))
+                            }
+                            // A sends an ack directly to B's permanent peer topic
+                            sendRendezvousAck(peerKey, myPublicKey, myName)
+                            _broadcastState.value = BroadcastState.PeerConnected(peerName)
+                            showToast("$peerName connected", "success")
+                            // Rendezvous done — close the temporary socket
+                            webSocket.close(1000, "handshake complete")
+                            rendezvousWs = null
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            })
+        }
+    }
+
+    fun stopBroadcast() {
+        rendezvousWs?.cancel()
+        rendezvousWs = null
+        _broadcastState.value = BroadcastState.Idle
+    }
+
+    private fun sendRendezvousAck(peerKey: String, myPublicKey: String, myName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // This is a handshake_intro — B's main WebSocket already handles this type
+                val body = JSONObject().apply {
+                    put("type", "handshake_intro")
+                    put("senderId", myPublicKey)
+                    put("senderName", myName)
+                    put("msgId", UUID.randomUUID().toString())
+                    put("timestamp", System.currentTimeMillis())
+                }.toString()
+                val request = Request.Builder()
+                    .url("https://ntfy.sh/phantm_peer_$peerKey")
+                    .post(body.toRequestBody("text/plain".toMediaTypeOrNull()))
+                    .build()
+                httpClient.newCall(request).execute().close()
             } catch (e: Exception) {
                 e.printStackTrace()
-                viewModelScope.launch {
-                    showToast("Broadcast failed: check network", "error")
-                }
             }
         }
     }
 
-    /**
-     * Resolves a Phantm Link Code entered by the user. Polls the recipient's
-     * ntfy.sh topic for a broadcast message whose linkCode field matches the
-     * entered code. Times out after 30 seconds.
-     *
-     * Calls onResult(publicKey, displayName) on success, onResult(null, null) on failure.
-     */
-    fun resolveLinkCode(
+    fun joinByCode(
         enteredCode: String,
-        onResult: (publicKey: String?, displayName: String?) -> Unit
+        onResult: (success: Boolean, message: String) -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val normalised = enteredCode.trim().uppercase().replace("-", "")
             if (normalised.length != 8) {
-                viewModelScope.launch { onResult(null, null) }
+                viewModelScope.launch { onResult(false, "Code must be 8 characters") }
                 return@launch
             }
 
+            val settings = identityDao.getIdentityOnce()
+            val myPublicKey = settings?.publicKey
+            val myName = settings?.displayName ?: "Phantm User"
+            if (myPublicKey == null) {
+                viewModelScope.launch { onResult(false, "Identity not ready") }
+                return@launch
+            }
+
+            val topic = PhantmLinkCode.rendezvousTopic(normalised)
+
             try {
-                val client = OkHttpClient.Builder()
-                    .readTimeout(35, java.util.concurrent.TimeUnit.SECONDS)
+                // B sends a hello into the rendezvous topic — A is listening there
+                val hello = JSONObject().apply {
+                    put("type", "rv_hello")
+                    put("publicKey", myPublicKey)
+                    put("displayName", myName)
+                    put("timestamp", System.currentTimeMillis())
+                }.toString()
+
+                val request = Request.Builder()
+                    .url("https://ntfy.sh/$topic")
+                    .post(hello.toRequestBody("text/plain".toMediaTypeOrNull()))
                     .build()
 
-                val url = "https://ntfy.sh/phantm_broadcasts/json?poll=1&since=all"
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
+                val response = httpClient.newCall(request).execute()
+                val ok = response.isSuccessful
                 response.close()
 
-                // Parse newline-delimited JSON from ntfy poll response
-                for (line in body.lines()) {
-                    if (line.isBlank()) continue
-                    try {
-                        val obj = JSONObject(line)
-                        val msgText = obj.optString("message")
-                        if (msgText.isBlank()) continue
-                        // ntfy stores our {"message": "<payload>"} wrapper as the message field
-                        // so msgText is itself a JSON object with a nested "message" key
-                        val actualPayload = try {
-                            val wrapper = JSONObject(msgText)
-                            wrapper.optString("message").ifBlank { msgText }
-                        } catch (e: Exception) {
-                            msgText  // fallback: treat as direct payload
-                        }
-                        if (actualPayload.isBlank()) continue
-                        val inner = try { JSONObject(actualPayload) } catch (e: Exception) { continue }
-                        if (inner.optString("type") != "link_code_broadcast") continue
-                        val broadcastCode = inner.optString("linkCode")
-                        val broadcastKey = inner.optString("publicKey")
-                        if (broadcastCode == normalised && broadcastKey.length == 64) {
-                            val displayName = inner.optString("displayName", "Peer_${broadcastKey.take(8)}")
-                            viewModelScope.launch { onResult(broadcastKey, displayName) }
-                            return@launch
-                        }
-                    } catch (e: Exception) {
-                        continue
+                if (ok) {
+                    // B's main WebSocket will receive A's ack (handshake_intro) shortly,
+                    // which auto-creates A as a contact. Tell the UI to proceed.
+                    viewModelScope.launch {
+                        onResult(true, "Connection request sent")
+                    }
+                } else {
+                    viewModelScope.launch {
+                        onResult(false, "Could not reach rendezvous channel")
                     }
                 }
-                viewModelScope.launch { onResult(null, null) }
             } catch (e: Exception) {
                 e.printStackTrace()
-                viewModelScope.launch { onResult(null, null) }
+                viewModelScope.launch {
+                    onResult(false, "Network error — check connection")
+                }
             }
         }
     }

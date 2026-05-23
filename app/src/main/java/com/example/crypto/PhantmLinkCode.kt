@@ -63,4 +63,13 @@ object PhantmLinkCode {
         val epochSec = System.currentTimeMillis() / 1000L
         return (600 - (epochSec % 600)).toInt()
     }
+
+    /**
+     * Derives the shared rendezvous topic name from a link code.
+     * Both the broadcaster and the joiner derive the same topic from the same code.
+     */
+    fun rendezvousTopic(code: String): String {
+        val normalised = code.trim().uppercase().replace("-", "")
+        return "phantm_rv_${normalised.lowercase()}"
+    }
 }

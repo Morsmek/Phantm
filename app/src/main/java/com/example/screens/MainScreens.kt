@@ -1295,6 +1295,18 @@ fun generateQrCode(content: String, width: Int, height: Int): Bitmap? {
     }
 }
 
+fun parsePhantmJoinUri(uriStr: String): String? {
+    // Returns the 8-char link code, or null
+    try {
+        val uri = Uri.parse(uriStr)
+        if (uri.scheme == "phantm" && uri.host == "join") {
+            val code = uri.getQueryParameter("code")
+            if (code != null && code.length == 8) return code
+        }
+    } catch (e: Exception) { }
+    return null
+}
+
 fun parsePhantmSyncUri(uriStr: String): Pair<String, String>? {
     try {
         val uri = Uri.parse(uriStr)
@@ -1458,13 +1470,8 @@ fun StandaloneQrDialog(
 ) {
     if (!isOpen) return
 
-    val qrContent = remember(myPublicKey, myName) {
-        try {
-            "phantm://sync?key=$myPublicKey&name=${java.net.URLEncoder.encode(myName, "UTF-8")}"
-        } catch (e: Exception) {
-            "phantm://sync?key=$myPublicKey&name=$myName"
-        }
-    }
+    val myCode = remember(myPublicKey) { PhantmLinkCode.generate(myPublicKey) }
+    val qrContent = "phantm://join?code=${myCode.replace("-", "")}"
     val qrBitmap = remember(qrContent) { generateQrCode(qrContent, 768, 768) }
     val context = LocalContext.current
 
@@ -1630,6 +1637,11 @@ fun AddContactScreen(
         identityForCode?.publicKey?.let { PhantmLinkCode.generate(it) } ?: "----"
     }
     var countdown by remember { mutableStateOf(PhantmLinkCode.secondsRemaining()) }
+    val broadcastState by viewModel.broadcastState.collectAsStateWithLifecycle()
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopBroadcast() }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -1702,12 +1714,30 @@ fun AddContactScreen(
                 fontFamily = MonospaceFontFamily
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { viewModel.broadcastLinkCode() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
-                modifier = Modifier.fillMaxWidth().height(44.dp)
-            ) {
-                Text("BROADCAST MY CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            when (val state = broadcastState) {
+                is PhantmViewModel.BroadcastState.Idle -> {
+                    Button(
+                        onClick = { viewModel.startBroadcast() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Text("BROADCAST MY CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+                is PhantmViewModel.BroadcastState.Listening -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            color = CyberCyan,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("WAITING FOR PEER...", color = CyberCyan, fontSize = 11.sp, fontFamily = MonospaceFontFamily)
+                    }
+                }
+                is PhantmViewModel.BroadcastState.PeerConnected -> {
+                    Text("${state.name} CONNECTED ✓", color = CyberGreen, fontSize = 12.sp, fontFamily = MonospaceFontFamily)
+                }
             }
         }
 
@@ -1743,14 +1773,13 @@ fun AddContactScreen(
             onClick = {
                 isResolving = true
                 actualResolveError = null
-                viewModel.resolveLinkCode(linkCodeInput) { key, name ->
+                viewModel.joinByCode(linkCodeInput) { success, message ->
                     isResolving = false
-                    if (key != null) {
-                        viewModel.addContact(key, name ?: "Peer_${key.take(8)}")
-                        viewModel.sendHandshakeIntro(key)
-                        onContactLinked(key)
+                    if (success) {
+                        viewModel.showToast("Connecting to peer...", "success")
+                        onContactLinked("")
                     } else {
-                        actualResolveError = "Code not found. Ask peer to tap BROADCAST MY CODE first."
+                        actualResolveError = message
                     }
                 }
             },
@@ -1773,7 +1802,7 @@ fun AddContactScreen(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
-                if (isResolving) "RESOLVING..." else "FIND PEER",
+                if (isResolving) "CONNECTING..." else "CONNECT",
                 fontFamily = MonospaceFontFamily,
                 fontWeight = FontWeight.Bold
             )
@@ -1794,7 +1823,7 @@ fun AddContactScreen(
             Text(
                 "1. Tell your peer your 8-character code verbally, on paper, or in any chat.\n" +
                 "2. Tap BROADCAST MY CODE.\n" +
-                "3. They enter your code on their phone and tap FIND PEER.",
+                "3. They enter your code on their phone and tap CONNECT.",
                 color = CyberTextSecondary,
                 fontSize = 11.sp,
                 lineHeight = 18.sp
@@ -1807,7 +1836,10 @@ fun AddContactScreen(
         Spacer(modifier = Modifier.height(8.dp))
         
         Button(
-            onClick = { showQrDialog = true },
+            onClick = { 
+                viewModel.startBroadcast()
+                showQrDialog = true 
+            },
             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = CyberCyan), border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.4f)), shape = RoundedCornerShape(2.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
         ) {
@@ -1855,13 +1887,17 @@ fun AddContactScreen(
             ) {
                 CameraScannerView(
                     onQrScanned = { qrValue ->
-                        val parsed = parsePhantmSyncUri(qrValue)
-                        if (parsed != null) {
-                            val (key, name) = parsed
-                            viewModel.addContact(key, name)
-                            viewModel.sendHandshakeIntro(key)
+                        val code = parsePhantmJoinUri(qrValue)
+                        if (code != null) {
                             showScanner = false
-                            onContactLinked(key)
+                            viewModel.joinByCode(code) { success, message ->
+                                if (success) {
+                                    viewModel.showToast("Connecting...", "success")
+                                    onContactLinked("")
+                                } else {
+                                    viewModel.showToast(message, "error")
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()
