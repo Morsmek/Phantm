@@ -2,6 +2,7 @@ package com.example.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Lock
@@ -34,20 +35,20 @@ fun PhantmLogo(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            painter = painterResource(id = R.drawable.phantm_logo),
+        // Use the real logo mark — logo_icon.png, not the SVG approximation
+        androidx.compose.foundation.Image(
+            painter = painterResource(id = R.drawable.logo_icon),
             contentDescription = "Phantm",
-            tint = CyberCyan,
             modifier = Modifier.size(size)
         )
         if (showText) {
-            Text(
-                "PHANTM",
-                color = CyberCyan,
-                fontFamily = MonospaceFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = (size.value * 0.9).sp,
-                letterSpacing = 3.sp
+            // Use the real wordmark image instead of a Text composable
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = R.drawable.logo_text),
+                contentDescription = null,
+                modifier = Modifier
+                    .height(size * 0.7f)
+                    .wrapContentWidth()
             )
         }
     }

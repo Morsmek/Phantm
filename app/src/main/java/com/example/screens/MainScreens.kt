@@ -1578,6 +1578,7 @@ fun AddContactScreen(
             .background(CyberBlack)
             .drawDotGrid()
             .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(24.dp)
             .verticalScroll(androidx.compose.foundation.rememberScrollState())
     ) {
@@ -1769,6 +1770,8 @@ fun AddContactScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text("SCAN QR CODE", fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (showQrDialog) {
             identityForCode?.let { self ->
@@ -2112,38 +2115,49 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                         
                             // Mnemonic word grid
-                            self.mnemonic?.let { phrase ->
+                            val phrase = self.mnemonic
+                            if (phrase != null) {
                                 val words = phrase.split(" ")
-                                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight()
+                                val rows = words.chunked(3)
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(words.size) { index ->
+                                    rows.forEach { rowWords ->
                                         Row(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(CyberCard)
-                                                .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text(
-                                                text = "${index + 1}",
-                                                color = CyberCyan,
-                                                fontSize = 9.sp,
-                                                fontFamily = MonospaceFontFamily,
-                                                modifier = Modifier.width(16.dp)
-                                            )
-                                            Text(
-                                                text = words[index],
-                                                color = CyberTextPrimary,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
+                                            rowWords.forEachIndexed { colIndex, word ->
+                                                val wordIndex = rows.indexOf(rowWords) * 3 + colIndex
+                                                Row(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(CyberCard)
+                                                        .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "${wordIndex + 1}",
+                                                        color = CyberCyan,
+                                                        fontSize = 9.sp,
+                                                        fontFamily = MonospaceFontFamily,
+                                                        modifier = Modifier.width(16.dp)
+                                                    )
+                                                    Text(
+                                                        text = word,
+                                                        color = CyberTextPrimary,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                }
+                                            }
+                                            // Fill remaining slots in last row if words.size % 3 != 0
+                                            repeat(3 - rowWords.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
                                         }
                                     }
                                 }
