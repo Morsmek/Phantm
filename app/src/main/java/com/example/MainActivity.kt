@@ -32,8 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.components.PhantmToast
-import com.example.components.ShimmerBadge
+import com.example.components.*
 import com.example.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.*
@@ -278,9 +277,9 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(CyberBlack),
         bottomBar = {
-            CustomNavigationBar(
-                activeTab = activeTab,
-                onTabChange = onTabChange
+            PhantmNavigationBar(
+                selectedTab = activeTab,
+                onTabSelected = onTabChange
             )
         },
         containerColor = CyberBlack
@@ -353,7 +352,7 @@ fun CustomNavigationBar(
     ) {
         val tabItems = listOf(
             BottomTabItem(DashboardTab.Chats, "Chats", Icons.Default.ChatBubble, Icons.Outlined.ChatBubbleOutline),
-            BottomTabItem(DashboardTab.Contacts, "Peers", Icons.Default.People, Icons.Outlined.PeopleOutline),
+            BottomTabItem(DashboardTab.Contacts, "Contacts", Icons.Default.People, Icons.Outlined.PeopleOutline),
             BottomTabItem(DashboardTab.Profile, "Identity", Icons.Default.Lock, Icons.Default.LockOpen),
             BottomTabItem(DashboardTab.Settings, "Settings", Icons.Default.Settings, Icons.Outlined.Settings)
         )
