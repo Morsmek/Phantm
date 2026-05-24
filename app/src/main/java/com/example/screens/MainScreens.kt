@@ -1644,6 +1644,12 @@ fun AddContactScreen(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.linkedContactId.collect { contactId ->
+            onContactLinked(contactId)
+        }
+    }
+
+    LaunchedEffect(Unit) {
         while (true) {
             countdown = PhantmLinkCode.secondsRemaining()
             kotlinx.coroutines.delay(1000)
@@ -1776,8 +1782,7 @@ fun AddContactScreen(
                 viewModel.joinByCode(linkCodeInput) { success, message ->
                     isResolving = false
                     if (success) {
-                        viewModel.showToast("Connecting to peer...", "success")
-                        onContactLinked("")
+                        viewModel.showToast("Code accepted — waiting for peer...", "success")
                     } else {
                         actualResolveError = message
                     }
@@ -1892,8 +1897,7 @@ fun AddContactScreen(
                             showScanner = false
                             viewModel.joinByCode(code) { success, message ->
                                 if (success) {
-                                    viewModel.showToast("Connecting...", "success")
-                                    onContactLinked("")
+                                    viewModel.showToast("Code accepted — waiting for peer...", "success")
                                 } else {
                                     viewModel.showToast(message, "error")
                                 }
