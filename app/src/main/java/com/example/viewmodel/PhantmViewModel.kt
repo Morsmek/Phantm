@@ -489,6 +489,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                                     // Handshake intro: contact was auto-created above. Do not insert a chat message.
                                     val messageType = innerJson.optString("type", "")
                                     if (messageType == "handshake_intro") {
+                                        _linkedContactId.emit(senderId)
                                         val settings = identityDao.getIdentityOnce()
                                         if (settings?.notificationsEnabled == true) {
                                             showSystemNotification(
@@ -594,6 +595,9 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private val _linkedContactId = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val linkedContactId: SharedFlow<String> = _linkedContactId.asSharedFlow()
+
     private val _nfcIncomingContact = MutableSharedFlow<Pair<String, String>>(replay = 0)
     val nfcIncomingContact = _nfcIncomingContact.asSharedFlow()
 
@@ -647,6 +651,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                             }
                             // A sends an ack directly to B's permanent peer topic
                             sendRendezvousAck(peerKey, myPublicKey, myName)
+                            _linkedContactId.emit(peerKey)
                             _broadcastState.value = BroadcastState.PeerConnected(peerName)
                             showToast("$peerName connected", "success")
                             // Rendezvous done — close the temporary socket
