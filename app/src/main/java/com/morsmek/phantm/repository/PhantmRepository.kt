@@ -1,6 +1,5 @@
 package com.morsmek.phantm.repository
 
-import android.content.Context
 import com.morsmek.phantm.crypto.PhantmCrypto
 import com.morsmek.phantm.crypto.PhantmLinkCode
 import com.morsmek.phantm.db.ContactDao
@@ -13,17 +12,21 @@ import com.morsmek.phantm.db.PendingRequestEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -45,10 +48,13 @@ class PhantmRepository(
 ) {
     private var currentConnectedKey: String? = null
     private var webSocket: WebSocket? = null
-    private var okHttpClient: OkHttpClient? = null
-    private var wsJob: kotlinx.coroutines.Job? = null
     private var rendezvousWs: WebSocket? = null
-    private val httpClient = OkHttpClient()
+    private var wsJob: kotlinx.coroutines.Job? = null
+
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
 
     private val _broadcastState = MutableStateFlow<BroadcastState>(BroadcastState.Idle)
     val broadcastState: StateFlow<BroadcastState> = _broadcastState.asStateFlow()
@@ -60,21 +66,17 @@ class PhantmRepository(
     val linkedContactId: SharedFlow<String> = _linkedContactId.asSharedFlow()
 
     fun setupWebSocketConnection(publicKey: String, displayName: String) {
-        if (currentConnectedKey == publicKey) return
+        if (currentConnectedKey == publicKey && webSocket != null) return
+
         disconnectWebSocket()
         currentConnectedKey = publicKey
 
         wsJob = coroutineScope.launch(Dispatchers.IO) {
-            val client = OkHttpClient.Builder()
-                .readTimeout(0, TimeUnit.MILLISECONDS)
-                .build()
-            okHttpClient = client
-
             val topic = PhantmCrypto.deriveTopic(publicKey)
             val wsUrl = "wss://ntfy.sh/$topic/ws"
             val request = Request.Builder().url(wsUrl).build()
 
-            val wsListener = object : WebSocketListener() {
+            webSocket = httpClient.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     coroutineScope.launch {
                         _isConnected.value = true
@@ -85,150 +87,140 @@ class PhantmRepository(
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     try {
                         val outerJson = JSONObject(text)
-                        val event = outerJson.optString("event")
-                        if (event == "message") {
-                            val msgText = outerJson.optString("message")
-                            val innerJson = try { JSONObject(msgText) } catch (e: Exception) { return }
-                            val senderId = innerJson.optString("senderId")
-                            val senderName = innerJson.optString("senderName")
-                            val msgId = innerJson.optString("msgId")
-                            val timestamp = innerJson.optLong("timestamp", System.currentTimeMillis())
+                        if (outerJson.optString("event") != "message") return
 
-                            if (senderId.length == 64 && senderId != publicKey) {
-                                coroutineScope.launch {
-                                    var existing = contactDao.getContactOnce(senderId)
-                                    if (existing == null) {
-                                        val newContact = ContactEntity(
-                                            id = senderId,
-                                            name = if (senderName.isNotBlank()) senderName else "Peer_${senderId.substring(0, 8)}"
-                                        )
-                                        contactDao.insertContact(newContact)
-                                        existing = newContact
+                        val msgText = outerJson.optString("message")
+                        val innerJson = try {
+                            JSONObject(msgText)
+                        } catch (_: Exception) {
+                            return
+                        }
+
+                        val senderId = innerJson.optString("senderId")
+                        val senderName = innerJson.optString("senderName")
+                        val msgId = innerJson.optString("msgId")
+                        val timestamp = innerJson.optLong("timestamp", System.currentTimeMillis())
+
+                        if (senderId.length != 64 || senderId == publicKey || msgId.isBlank()) return
+
+                        coroutineScope.launch(Dispatchers.IO) {
+                            var existing = contactDao.getContactOnce(senderId)
+                            if (existing == null) {
+                                val newContact = ContactEntity(
+                                    id = senderId,
+                                    name = if (senderName.isNotBlank()) senderName else "Peer_${senderId.substring(0, 8)}"
+                                )
+                                contactDao.insertContact(newContact)
+                                existing = newContact
+                            }
+
+                            val messageType = innerJson.optString("type", "")
+
+                            if (messageType == "handshake_intro") {
+                                _linkedContactId.tryEmit(senderId)
+
+                                val settings = identityDao.getIdentityOnce()
+                                if (settings?.notificationsEnabled == true) {
+                                    onNotificationTrigger("New Phantm Contact", "${existing.name} added you on Phantm")
+                                }
+                                onToastTrigger("${existing.name} added you as a contact", "success")
+                                return@launch
+                            }
+
+                            if (messageDao.getMessageOnce(msgId) != null) return@launch
+
+                            val passphrase = existing.passphrase
+                            var decryptedContent = innerJson.optString("content")
+                            val ciphertext = innerJson.optString("ciphertext", "")
+                            val iv = innerJson.optString("iv", "")
+                            val hmac = innerJson.optString("hmac", "")
+
+                            if (ciphertext.isNotBlank() && iv.isNotBlank() && hmac.isNotBlank()) {
+                                decryptedContent = if (!passphrase.isNullOrBlank()) {
+                                    try {
+                                        val salt = listOf(senderId, publicKey).sorted().joinToString("")
+                                        PhantmCrypto.decrypt(ciphertext, iv, hmac, passphrase, salt)
+                                    } catch (_: SecurityException) {
+                                        "[Decryption Failed: Verification check failed. Passphrase mismatch.]"
+                                    } catch (_: Exception) {
+                                        "[Decryption Failed: Error decrypting message payload.]"
                                     }
-
-                                    val messageType = innerJson.optString("type", "")
-                                    if (messageType == "handshake_intro") {
-                                        _linkedContactId.emit(senderId)
-                                        val settings = identityDao.getIdentityOnce()
-                                        if (settings?.notificationsEnabled == true) {
-                                            onNotificationTrigger("New Phantm Contact", "${existing.name} added you on Phantm")
-                                        }
-                                        onToastTrigger("${existing.name} added you as a contact", "success")
-                                        return@launch
-                                    }
-
-                                    val passphrase = existing.passphrase
-                                    var decryptedContent = innerJson.optString("content")
-                                    val ciphertext = innerJson.optString("ciphertext", "")
-                                    val iv = innerJson.optString("iv", "")
-                                    val hmac = innerJson.optString("hmac", "")
-
-                                    if (ciphertext.isNotBlank() && iv.isNotBlank() && hmac.isNotBlank()) {
-                                        decryptedContent = if (!passphrase.isNullOrBlank()) {
-                                            try {
-                                                val salt = listOf(senderId, publicKey).sorted().joinToString("")
-                                                PhantmCrypto.decrypt(ciphertext, iv, hmac, passphrase, salt)
-                                            } catch (e: SecurityException) {
-                                                "[Decryption Failed: Verification check failed. Passphrase mismatch.]"
-                                            } catch (e: Exception) {
-                                                "[Decryption Failed: Error decrypting message payload.]"
-                                            }
-                                        } else {
-                                            "[Encrypted Message - Passphrase not set]"
-                                        }
-                                    }
-
-                                    messageDao.insertMessage(
-                                        MessageEntity(
-                                            id = msgId,
-                                            contactId = senderId,
-                                            content = decryptedContent,
-                                            timestamp = timestamp,
-                                            isSent = false,
-                                            status = "delivered"
-                                        )
-                                    )
-
-                                    val settings = identityDao.getIdentityOnce()
-                                    if (settings?.notificationsEnabled == true) {
-                                        val peerName = existing.name
-                                        val displayTitle = if (settings.showNotificationPreview) "New Phantm from $peerName" else "Phantm Secure Alert"
-                                        val displayBody = if (settings.showNotificationPreview) decryptedContent else "End-to-end encrypted packet received."
-                                        onNotificationTrigger(displayTitle, displayBody)
-                                    }
+                                } else {
+                                    "[Encrypted Message - Passphrase not set]"
                                 }
                             }
+
+                            messageDao.insertMessage(
+                                MessageEntity(
+                                    id = msgId,
+                                    contactId = senderId,
+                                    content = decryptedContent,
+                                    timestamp = timestamp,
+                                    isSent = false,
+                                    status = "delivered"
+                                )
+                            )
+
+                            val settings = identityDao.getIdentityOnce()
+                            if (settings?.notificationsEnabled == true) {
+                                val peerName = existing.name
+                                val displayTitle =
+                                    if (settings.showNotificationPreview) "New Phantm from $peerName" else "Phantm Secure Alert"
+                                val displayBody =
+                                    if (settings.showNotificationPreview) decryptedContent else "End-to-end encrypted packet received."
+                                onNotificationTrigger(displayTitle, displayBody)
+                            }
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } catch (_: Exception) {
                     }
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     _isConnected.value = false
-                    coroutineScope.launch {
-                        delay(5000)
-                        val retryKey = currentConnectedKey
-                        if (retryKey != null) {
-                            currentConnectedKey = null
-                            val currentName = identityDao.getIdentityOnce()?.displayName ?: displayName
-                            setupWebSocketConnection(retryKey, currentName)
-                        }
-                    }
+                    scheduleReconnect(displayName)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     _isConnected.value = false
-                    if (code != 1000) {
-                        coroutineScope.launch {
-                            delay(5000)
-                            val retryKey = currentConnectedKey
-                            if (retryKey != null) {
-                                currentConnectedKey = null
-                                val currentName = identityDao.getIdentityOnce()?.displayName ?: displayName
-                                setupWebSocketConnection(retryKey, currentName)
-                            }
-                        }
-                    }
+                    if (code != 1000) scheduleReconnect(displayName)
                 }
-            }
-            webSocket = client.newWebSocket(request, wsListener)
+            })
+        }
+    }
+
+    private fun scheduleReconnect(displayName: String) {
+        coroutineScope.launch(Dispatchers.IO) {
+            delay(5000)
+            val retryKey = currentConnectedKey ?: return@launch
+            currentConnectedKey = null
+            val currentName = identityDao.getIdentityOnce()?.displayName ?: displayName
+            setupWebSocketConnection(retryKey, currentName)
         }
     }
 
     fun disconnectWebSocket() {
-        try {
-            _isConnected.value = false
-            webSocket?.close(1000, "Clean shutdown")
-            webSocket = null
-            okHttpClient = null
-            wsJob?.cancel()
-            wsJob = null
-            currentConnectedKey = null
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        _isConnected.value = false
+        webSocket?.close(1000, "Clean shutdown")
+        webSocket = null
+        wsJob?.cancel()
+        wsJob = null
+        currentConnectedKey = null
     }
 
     fun startBroadcast() {
         coroutineScope.launch(Dispatchers.IO) {
             val settings = identityDao.getIdentityOnce() ?: return@launch
             val myPublicKey = settings.publicKey ?: return@launch
-            val myName = settings.displayName
             val code = PhantmLinkCode.generate(myPublicKey)
             val topic = PhantmLinkCode.rendezvousTopic(code)
 
             rendezvousWs?.cancel()
 
-            val client = OkHttpClient.Builder()
-                .readTimeout(0, TimeUnit.MILLISECONDS)
-                .build()
-
             val request = Request.Builder()
                 .url("wss://ntfy.sh/$topic/ws")
                 .build()
 
-            rendezvousWs = client.newWebSocket(request, object : WebSocketListener() {
+            rendezvousWs = httpClient.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     coroutineScope.launch { _broadcastState.value = BroadcastState.Listening }
                 }
@@ -246,14 +238,13 @@ class PhantmRepository(
                         val introMessage = hello.optString("introMessage").ifBlank { "Let's connect on Phantm" }
                         if (peerKey.length != 64) return
 
-                        coroutineScope.launch {
+                        coroutineScope.launch(Dispatchers.IO) {
                             pendingRequestDao.insertRequest(
                                 PendingRequestEntity(id = peerKey, name = peerName, introMessage = introMessage)
                             )
                             onToastTrigger("New connection request from $peerName", "info")
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } catch (_: Exception) {
                     }
                 }
             })
@@ -279,11 +270,9 @@ class PhantmRepository(
 
             sendRendezvousAck(peerKey, myPublicKey, myName)
 
-            withContext(Dispatchers.Main) {
-                _linkedContactId.emit(peerKey)
-                onToastTrigger("$peerName added", "success")
-                stopBroadcast()
-            }
+            _linkedContactId.tryEmit(peerKey)
+            onToastTrigger("$peerName added", "success")
+            stopBroadcast()
         }
     }
 
@@ -297,14 +286,15 @@ class PhantmRepository(
                     put("msgId", UUID.randomUUID().toString())
                     put("timestamp", System.currentTimeMillis())
                 }.toString()
+
                 val topic = PhantmCrypto.deriveTopic(peerKey)
                 val request = Request.Builder()
                     .url("https://ntfy.sh/$topic")
                     .post(body.toRequestBody("text/plain".toMediaTypeOrNull()))
                     .build()
+
                 httpClient.newCall(request).execute().close()
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
             }
         }
     }
@@ -345,17 +335,16 @@ class PhantmRepository(
                     .post(hello.toRequestBody("text/plain".toMediaTypeOrNull()))
                     .build()
 
-                val response = httpClient.newCall(request).execute()
-                val ok = response.isSuccessful
-                response.close()
-
-                if (ok) {
-                    withContext(Dispatchers.Main) { onResult(true, "Connection request sent") }
-                } else {
-                    withContext(Dispatchers.Main) { onResult(false, "Could not reach rendezvous channel") }
+                httpClient.newCall(request).execute().use { response ->
+                    withContext(Dispatchers.Main) {
+                        if (response.isSuccessful) {
+                            onResult(true, "Connection request sent")
+                        } else {
+                            onResult(false, "Could not reach rendezvous channel")
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
                 withContext(Dispatchers.Main) { onResult(false, "Network error — check connection") }
             }
         }
@@ -363,31 +352,31 @@ class PhantmRepository(
 
     fun sendMessage(contactId: String, content: String) {
         if (content.isBlank()) return
+
         coroutineScope.launch(Dispatchers.IO) {
             val msgId = UUID.randomUUID().toString()
-            val msg = MessageEntity(
+            val localMsg = MessageEntity(
                 id = msgId,
                 contactId = contactId,
                 content = content,
                 isSent = true,
                 status = "sent"
             )
-            messageDao.insertMessage(msg)
+            messageDao.insertMessage(localMsg)
 
             val settings = identityDao.getIdentityOnce()
             val ourPublicKey = settings?.publicKey ?: ""
             val ourDisplayName = settings?.displayName ?: "Chosen Cipher"
-            
             val contact = contactDao.getContactOnce(contactId)
             val passphrase = contact?.passphrase
-            
+
             try {
                 val payload = JSONObject().apply {
                     put("senderId", ourPublicKey)
                     put("senderName", ourDisplayName)
                     put("msgId", msgId)
                     put("timestamp", System.currentTimeMillis())
-                    
+
                     if (!passphrase.isNullOrBlank()) {
                         val salt = listOf(ourPublicKey, contactId).sorted().joinToString("")
                         val encryptedData = PhantmCrypto.encrypt(content, passphrase, salt)
@@ -400,21 +389,19 @@ class PhantmRepository(
                 }.toString()
 
                 val topic = PhantmCrypto.deriveTopic(contactId)
-                val url = "https://ntfy.sh/$topic"
                 val request = Request.Builder()
-                    .url(url)
+                    .url("https://ntfy.sh/$topic")
                     .post(payload.toRequestBody("text/plain".toMediaTypeOrNull()))
                     .build()
 
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        messageDao.insertMessage(msg.copy(status = "delivered"))
+                        messageDao.insertMessage(localMsg.copy(status = "delivered"))
                     } else {
                         onToastTrigger("Broker queued; counterpart offline.", "info")
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
                 onToastTrigger("Packet cached locally. Delivery pending network.", "info")
             }
         }

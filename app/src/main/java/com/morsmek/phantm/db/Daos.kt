@@ -58,6 +58,9 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteOldMessages(cutoffTimestamp: Long)
+
+    @Query("SELECT * FROM messages WHERE id = :msgId LIMIT 1")
+    suspend fun getMessageOnce(msgId: String): MessageEntity?
 }
 
 @Dao
