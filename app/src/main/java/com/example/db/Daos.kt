@@ -59,3 +59,15 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteOldMessages(cutoffTimestamp: Long)
 }
+
+@Dao
+interface PendingRequestDao {
+    @Query("SELECT * FROM pending_requests ORDER BY timestamp ASC")
+    fun getAllPendingRequestsFlow(): Flow<List<PendingRequestEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRequest(request: PendingRequestEntity)
+
+    @Query("DELETE FROM pending_requests WHERE id = :id")
+    suspend fun deleteRequest(id: String)
+}

@@ -1613,6 +1613,7 @@ fun AddContactScreen(
 ) {
     var linkCodeInput by remember { mutableStateOf("") }
     var isResolving by remember { mutableStateOf(false) }
+    var pendingIntroCode by remember { mutableStateOf<String?>(null) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
     var showScanner by remember { mutableStateOf(false) }
@@ -1747,6 +1748,45 @@ fun AddContactScreen(
             }
         }
 
+        val pendingRequests by viewModel.pendingRequests.collectAsStateWithLifecycle()
+        if (pendingRequests.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("PENDING REQUESTS", color = CyberCyan, fontSize = 11.sp, fontFamily = MonospaceFontFamily, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            pendingRequests.forEach { request ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CyberSurface)
+                        .border(1.dp, CyberCyan.copy(alpha=0.3f), RoundedCornerShape(8.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(request.name, color = CyberTextPrimary, fontWeight = FontWeight.Bold)
+                    Text("\"${request.introMessage}\"", color = CyberTextSecondary, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { viewModel.acceptRequest(request.id, request.name) },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack),
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Text("ACCEPT", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.rejectRequest(request.id) },
+                            border = BorderStroke(1.dp, CyberRed),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CyberRed),
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Text("REJECT", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
@@ -1777,16 +1817,8 @@ fun AddContactScreen(
 
         Button(
             onClick = {
-                isResolving = true
                 actualResolveError = null
-                viewModel.joinByCode(linkCodeInput) { success, message ->
-                    isResolving = false
-                    if (success) {
-                        viewModel.showToast("Code accepted — waiting for peer...", "success")
-                    } else {
-                        actualResolveError = message
-                    }
-                }
+                pendingIntroCode = linkCodeInput
             },
             enabled = linkCodeInput.length == 8 && !isResolving,
             colors = ButtonDefaults.buttonColors(
@@ -1895,13 +1927,7 @@ fun AddContactScreen(
                         val code = parsePhantmJoinUri(qrValue)
                         if (code != null) {
                             showScanner = false
-                            viewModel.joinByCode(code) { success, message ->
-                                if (success) {
-                                    viewModel.showToast("Code accepted — waiting for peer...", "success")
-                                } else {
-                                    viewModel.showToast(message, "error")
-                                }
-                            }
+                            pendingIntroCode = code
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1944,6 +1970,66 @@ fun AddContactScreen(
                     )
                 }
             }
+        }
+
+        pendingIntroCode?.let { codeToJoin ->
+            var introText by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { pendingIntroCode = null },
+                containerColor = CyberSurface,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.border(1.dp, CyberBorder, RoundedCornerShape(12.dp)),
+                title = { Text("WELCOME MESSAGE", color = CyberCyan, fontFamily = MonospaceFontFamily, fontSize = 14.sp) },
+                text = {
+                    Column {
+                        Text("Send a short intro so they know who you are.", color = CyberTextSecondary, fontSize = 12.sp)
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = introText,
+                            onValueChange = { if (it.length <= 50) introText = it },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = CyberCyan,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedContainerColor = CyberBlack,
+                                unfocusedContainerColor = CyberBlack
+                            ),
+                            placeholder = { Text("e.g. It's Alice!", color = CyberTextSecondary.copy(alpha=0.5f)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("${introText.length}/50", color = CyberTextSecondary, fontSize = 10.sp, modifier = Modifier.align(Alignment.End))
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val msg = introText.trim()
+                            pendingIntroCode = null
+                            isResolving = true
+                            actualResolveError = null
+                            viewModel.joinByCode(codeToJoin, msg) { success, message ->
+                                isResolving = false
+                                if (success) {
+                                    viewModel.showToast("Request sent! Waiting for peer...", "success")
+                                } else {
+                                    actualResolveError = message
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = CyberBlack)
+                    ) {
+                        Text("SEND REQUEST", fontWeight = FontWeight.Bold, fontFamily = MonospaceFontFamily, fontSize = 12.sp)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingIntroCode = null }) {
+                        Text("CANCEL", color = CyberTextSecondary, fontFamily = MonospaceFontFamily)
+                    }
+                }
+            )
         }
     }
 }

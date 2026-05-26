@@ -36,6 +36,14 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
     private val identityDao = db.identityDao()
     private val contactDao = db.contactDao()
     private val messageDao = db.messageDao()
+    private val pendingRequestDao = db.pendingRequestDao()
+
+    val pendingRequests: StateFlow<List<PendingRequestEntity>> = pendingRequestDao.getAllPendingRequestsFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     // Network Broker State Tracking
     private var currentConnectedKey: String? = null
@@ -642,27 +650,51 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                         val peerKey = hello.optString("publicKey")
                         val peerName = hello.optString("displayName")
                             .ifBlank { "Peer_${peerKey.take(8)}" }
+                        val introMessage = hello.optString("introMessage").ifBlank { "Let's connect on Phantm" }
                         if (peerKey.length != 64) return
 
                         viewModelScope.launch {
-                            // A saves B as a contact
-                            if (contactDao.getContactOnce(peerKey) == null) {
-                                contactDao.insertContact(ContactEntity(id = peerKey, name = peerName))
-                            }
-                            // A sends an ack directly to B's permanent peer topic
-                            sendRendezvousAck(peerKey, myPublicKey, myName)
-                            _linkedContactId.emit(peerKey)
-                            _broadcastState.value = BroadcastState.PeerConnected(peerName)
-                            showToast("$peerName connected", "success")
-                            // Rendezvous done — close the temporary socket
-                            webSocket.close(1000, "handshake complete")
-                            rendezvousWs = null
+                            pendingRequestDao.insertRequest(
+                                PendingRequestEntity(id = peerKey, name = peerName, introMessage = introMessage)
+                            )
+                            showToast("New connection request from $peerName", "info")
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
             })
+        }
+    }
+
+    fun acceptRequest(peerKey: String, peerName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val settings = identityDao.getIdentityOnce() ?: return@launch
+            val myPublicKey = settings.publicKey ?: return@launch
+            val myName = settings.displayName
+
+            // Save contact
+            if (contactDao.getContactOnce(peerKey) == null) {
+                contactDao.insertContact(ContactEntity(id = peerKey, name = peerName))
+            }
+            // Delete request
+            pendingRequestDao.deleteRequest(peerKey)
+
+            // Send ack directly to peer's permanent topic
+            sendRendezvousAck(peerKey, myPublicKey, myName)
+
+            viewModelScope.launch {
+                _linkedContactId.emit(peerKey)
+                showToast("$peerName added", "success")
+                // Close the temporary rendezvous socket
+                stopBroadcast()
+            }
+        }
+    }
+
+    fun rejectRequest(peerKey: String) {
+        viewModelScope.launch {
+            pendingRequestDao.deleteRequest(peerKey)
         }
     }
 
@@ -696,6 +728,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
 
     fun joinByCode(
         enteredCode: String,
+        introMessage: String,
         onResult: (success: Boolean, message: String) -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -721,6 +754,7 @@ class PhantmViewModel(application: Application) : AndroidViewModel(application) 
                     put("type", "rv_hello")
                     put("publicKey", myPublicKey)
                     put("displayName", myName)
+                    put("introMessage", introMessage.take(50))
                     put("timestamp", System.currentTimeMillis())
                 }.toString()
 

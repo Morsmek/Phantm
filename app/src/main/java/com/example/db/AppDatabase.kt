@@ -13,15 +13,17 @@ import net.sqlcipher.database.SupportFactory
     entities = [
         IdentitySettings::class,
         ContactEntity::class,
-        MessageEntity::class
+        MessageEntity::class,
+        PendingRequestEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun identityDao(): IdentityDao
     abstract fun contactDao(): ContactDao
     abstract fun messageDao(): MessageDao
+    abstract fun pendingRequestDao(): PendingRequestDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -46,6 +48,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS `pending_requests` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `introMessage` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -63,7 +71,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "phantm_database"
                 )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration() // safe for local app state prototyping
                 .build()
                 INSTANCE = instance

@@ -33,3 +33,11 @@ data class MessageEntity(
     val isSent: Boolean,
     val status: String // 'sent' | 'delivered' | 'read'
 )
+
+@Entity(tableName = "pending_requests")
+data class PendingRequestEntity(
+    @PrimaryKey val id: String, // sender's public key
+    val name: String,
+    val introMessage: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
