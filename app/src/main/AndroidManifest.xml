@@ -10,6 +10,7 @@
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <application
+        android:name=".PhantmApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

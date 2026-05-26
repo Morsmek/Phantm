@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.morsmek.phantm"
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.aistudio.phantm.secure.fpxclm"
+    applicationId = "com.morsmek.phantm"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -114,4 +114,6 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   implementation(libs.sqlcipher)
   implementation(libs.bouncycastle)
+  implementation(libs.androidx.work.runtime.ktx)
 }
+
