@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.alpha
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.morsmek.phantm.components.*
@@ -356,43 +358,73 @@ fun DashboardScreen(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(CyberBlack),
+            .background(BgDeep),
         bottomBar = {
             PhantmNavigationBar(
                 selectedTab = activeTab,
-                onTabSelected = onTabChange
+                onTabChange = onTabChange
             )
         },
-        containerColor = CyberBlack
+        containerColor = BgDeep
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (activeTab) {
-                DashboardTab.Chats -> {
-                    ChatsListScreen(
-                        viewModel = viewModel,
-                        onChatSelected = onChatSelected
+            // Watermark background
+            AnimatedVisibility(
+                visible = true,
+                enter = scaleIn(initialScale = 1.5f, animationSpec = tween(600)) + fadeIn(tween(600))
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(id = R.drawable.logo_icon),
+                        contentDescription = null,
+                        modifier = Modifier.size(280.dp).alpha(0.05f)
                     )
                 }
-                DashboardTab.Contacts -> {
-                    ContactsListScreen(
-                        viewModel = viewModel,
-                        onContactSelected = onChatSelected,
-                        onAddContactSelected = onAddContactSelected
-                    )
-                }
-                DashboardTab.Profile -> {
-                    ProfileScreen(
-                        viewModel = viewModel
-                    )
-                }
-                DashboardTab.Settings -> {
-                    SettingsScreen(
-                        viewModel = viewModel
-                    )
+            }
+
+            AnimatedContent(
+                targetState = activeTab,
+                transitionSpec = {
+                    val enter = slideInHorizontally(
+                        initialOffsetX = { if (targetState.ordinal > initialState.ordinal) it / 5 else -it / 5 },
+                        animationSpec = tween(280)
+                    ) + fadeIn(tween(280))
+                    val exit = slideOutHorizontally(
+                        targetOffsetX = { if (targetState.ordinal > initialState.ordinal) -it / 5 else it / 5 },
+                        animationSpec = tween(280)
+                    ) + fadeOut(tween(180))
+                    enter togetherWith exit
+                },
+                label = "tab_transitions"
+            ) { tab ->
+                when (tab) {
+                    DashboardTab.Chats -> {
+                        ChatsListScreen(
+                            viewModel = viewModel,
+                            onChatSelected = onChatSelected
+                        )
+                    }
+                    DashboardTab.Contacts -> {
+                        ContactsListScreen(
+                            viewModel = viewModel,
+                            onContactSelected = onChatSelected,
+                            onAddContactSelected = onAddContactSelected
+                        )
+                    }
+                    DashboardTab.Profile -> {
+                        ProfileScreen(
+                            viewModel = viewModel
+                        )
+                    }
+                    DashboardTab.Settings -> {
+                        SettingsScreen(
+                            viewModel = viewModel
+                        )
+                    }
                 }
             }
         }

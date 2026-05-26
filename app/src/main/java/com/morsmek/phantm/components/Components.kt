@@ -10,16 +10,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -30,24 +32,23 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.morsmek.phantm.crypto.PhantmCrypto
 import com.morsmek.phantm.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.absoluteValue
 
 @Composable
 fun WordChip(
@@ -81,9 +82,9 @@ fun WordChip(
 }
 
 fun Modifier.drawDotGrid(
-    dotColor: Color = CyberDotColor,   // Now 3% opacity — barely visible
-    gridSize: Dp = 40.dp,              // Wider grid = less dense = more minimal
-    dotRadius: Dp = 0.75.dp            // Smaller dots
+    dotColor: Color = CyanSubtle,
+    gridSize: Dp = 40.dp,
+    dotRadius: Dp = 0.75.dp
 ) = drawBehind {
     val sizePx = gridSize.toPx()
     val radiusPx = dotRadius.toPx()
@@ -152,17 +153,17 @@ fun Avatar(
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
-            .background(CyberSurface)
-            .border(1.dp, CyberCyan.copy(alpha = 0.6f), CircleShape),
+            .clip(RoundedCornerShape(16.dp))
+            .background(CyanDim)
+            .border(2.dp, CyanBorderHi, RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initials,
-            color = Color.White,
+            color = Cyan,
             fontWeight = FontWeight.Bold,
             fontSize = (size.value * 0.38f).sp,
-            fontFamily = MonospaceFontFamily
+            fontFamily = FontFamily.Default
         )
     }
 }
@@ -179,6 +180,14 @@ fun MessageBubble(
     val formatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val timeString = remember(timestamp) { formatter.format(Date(timestamp)) }
 
+    val ticks = if (isSent) {
+        when (status) {
+            "sent" -> "✓"
+            "delivered", "read" -> "✓✓"
+            else -> null
+        }
+    } else null
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -187,75 +196,50 @@ fun MessageBubble(
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 280.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isSent) 16.dp else 2.dp,
-                        bottomEnd = if (isSent) 2.dp else 16.dp
-                    )
-                )
-                .background(if (isSent) CyberCyan else CyberSurface)
-                .border(
-                    1.dp,
-                    if (isSent) Color.Transparent else Color.White.copy(alpha = 0.05f),
-                    RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isSent) 16.dp else 2.dp,
-                        bottomEnd = if (isSent) 2.dp else 16.dp
-                    )
-                )
                 .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = { onLongPress() }
-                    )
-                }
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                    detectTapGestures(onLongPress = { onLongPress() })
+                },
+            horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
         ) {
-            Text(
-                text = content,
-                color = if (isSent) CyberBlack else CyberTextPrimary,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                fontWeight = if (isSent) FontWeight.Medium else FontWeight.Normal
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier.align(Alignment.End),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .clip(
+                        if (isSent) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 4.dp, bottomStart = 20.dp)
+                        else RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 4.dp)
+                    )
+                    .background(if (isSent) Cyan else BgCard)
+                    .then(
+                        if (!isSent) Modifier.border(
+                            1.dp,
+                            Color(0x0FFFFFFF),
+                            RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 4.dp)
+                        ) else Modifier
+                    )
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .widthIn(max = 280.dp)
             ) {
                 Text(
-                    text = timeString,
-                    color = if (isSent) CyberBlack.copy(alpha = 0.6f) else CyberTextSecondary,
-                    fontSize = 10.sp,
-                    fontFamily = MonospaceFontFamily
+                    text = content,
+                    color = if (isSent) Color.Black else TxtPrimary,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = if (isSent) FontWeight.Medium else FontWeight.Normal
                 )
-                if (isSent) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    when (status) {
-                        "sent" -> {
-                            Text(
-                                text = "✓",
-                                color = CyberBlack.copy(alpha = 0.6f),
-                                fontSize = 10.sp,
-                                fontFamily = MonospaceFontFamily
-                            )
-                        }
-                        "delivered", "read" -> {
-                            val checkColor = if (status == "read") CyberBlack else CyberBlack.copy(alpha = 0.6f)
-                            Text(
-                                text = "✓✓",
-                                color = checkColor,
-                                fontSize = 10.sp,
-                                fontFamily = MonospaceFontFamily,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+            }
+            Spacer(Modifier.height(2.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            ) {
+                Text(text = timeString, color = TxtTertiary, fontSize = 9.sp)
+                if (ticks != null) {
+                    Text(
+                        text = ticks,
+                        color = if (status == "read") Cyan else TxtTertiary,
+                        fontSize = 9.sp,
+                        fontWeight = if (status == "read") FontWeight.Bold else FontWeight.Normal
+                    )
                 }
             }
         }
@@ -266,8 +250,6 @@ fun MessageBubble(
 fun ShimmerBadge(
     modifier: Modifier = Modifier
 ) {
-    // Visibility checker state linked to Composition Lifecycle.
-    // If composable leaves scope, animation values are garbage-collected instantly.
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val shimmerOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -281,9 +263,9 @@ fun ShimmerBadge(
 
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            CyberCyan.copy(alpha = 0.1f),
-            CyberCyan.copy(alpha = 0.5f),
-            CyberCyan.copy(alpha = 0.1f)
+            Cyan.copy(alpha = 0.1f),
+            Cyan.copy(alpha = 0.5f),
+            Cyan.copy(alpha = 0.1f)
         ),
         start = Offset(shimmerOffset - 300f, 0f),
         end = Offset(shimmerOffset, 150f)
@@ -293,20 +275,20 @@ fun ShimmerBadge(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(shimmerBrush)
-            .border(1.dp, CyberCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .border(1.dp, Cyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Lock,
             contentDescription = null,
-            tint = CyberCyan,
+            tint = Cyan,
             modifier = Modifier.size(12.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = "END-TO-END ENCRYPTED",
-            color = CyberCyan,
+            color = Cyan,
             fontWeight = FontWeight.Bold,
             fontSize = 9.sp,
             fontFamily = MonospaceFontFamily,
@@ -326,7 +308,6 @@ fun GlitchText(
 
     LaunchedEffect(text) {
         isSettled = false
-        // Simulating the 0.6s cyberpunk mount glitch
         repeat(5) {
             glitchX = (-4..4).random().toFloat()
             glitchY = (-2..2).random().toFloat()
@@ -337,19 +318,17 @@ fun GlitchText(
 
     Box(modifier = modifier) {
         if (!isSettled) {
-            // Cyan replica offset shadow
             Text(
                 text = text,
-                color = CyberCyan.copy(alpha = 0.7f),
+                color = Cyan.copy(alpha = 0.7f),
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 fontFamily = MonospaceFontFamily,
                 modifier = Modifier.offset(x = glitchX.dp, y = glitchY.dp)
             )
-            // Red replica offset shadow
             Text(
                 text = text,
-                color = CyberRed.copy(alpha = 0.7f),
+                color = SemanticRed.copy(alpha = 0.7f),
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 fontFamily = MonospaceFontFamily,
@@ -359,7 +338,7 @@ fun GlitchText(
 
         Text(
             text = text,
-            color = CyberTextPrimary,
+            color = TxtPrimary,
             fontWeight = FontWeight.Bold,
             fontFamily = MonospaceFontFamily,
             fontSize = 20.sp
@@ -414,44 +393,66 @@ fun DataPulse(
         modifier = modifier.size(80.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Pulse ring drawings on custom Canvas
         Canvas(modifier = Modifier.fillMaxSize()) {
             val centerOffset = Offset(size.width / 2, size.height / 2)
             val baseRadius = 18.dp.toPx()
 
-            // Draw Ring 1
             drawCircle(
-                color = CyberCyan.copy(alpha = ring1Alpha),
+                color = Cyan.copy(alpha = ring1Alpha),
                 radius = baseRadius * ring1Scale,
                 center = centerOffset,
                 style = Stroke(width = 1.5.dp.toPx())
             )
 
-            // Draw Ring 2
             drawCircle(
-                color = CyberCyan.copy(alpha = ring2Alpha),
+                color = Cyan.copy(alpha = ring2Alpha),
                 radius = baseRadius * ring2Scale,
                 center = centerOffset,
                 style = Stroke(width = 1.5.dp.toPx())
             )
         }
 
-        // Concentric Core Icon Box
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(CyberSurface)
-                .border(2.dp, CyberCyan, CircleShape),
+                .border(2.dp, Cyan, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Lock,
                 contentDescription = null,
-                tint = CyberCyan,
+                tint = Cyan,
                 modifier = Modifier.size(18.dp)
             )
         }
+    }
+}
+
+@Composable
+fun FigmaToggle(on: Boolean, onToggle: ((Boolean) -> Unit)?) {
+    val trackColor by animateColorAsState(if (on) Cyan else BgInset, tween(200), label = "trackColor")
+    Box(
+        modifier = Modifier
+            .width(44.dp)
+            .height(24.dp)
+            .clip(CircleShape)
+            .background(trackColor)
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                onToggle?.invoke(!on)
+            }
+            .padding(2.dp),
+        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        val thumbScale by animateFloatAsState(if (on) 1f else 0.9f, label = "thumbScale")
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer { scaleX = thumbScale; scaleY = thumbScale }
+                .clip(CircleShape)
+                .background(Color.White)
+        )
     }
 }
 
@@ -462,41 +463,148 @@ fun ToggleSwitch(
     disabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val transition = updateTransition(targetState = checked, label = "toggle")
-    val offsetThumb by transition.animateDp(
-        transitionSpec = { spring(stiffness = Spring.StiffnessMedium) },
-        label = "thumbOffset"
-    ) { state ->
-        if (state) 20.dp else 4.dp
-    }
-    val trackColor by transition.animateColor(
-        transitionSpec = { tween(150) },
-        label = "trackColor"
-    ) { state ->
-        if (state) CyberCyan else CyberSurface
-    }
+    FigmaToggle(on = checked, onToggle = if (disabled) null else onCheckedChange)
+}
 
-    Box(
+@Composable
+fun PhantmInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    leadingIcon: ImageVector,
+    prefix: String? = null,
+    monospace: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    Row(
         modifier = modifier
-            .size(width = 48.dp, height = 28.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(trackColor)
-            .border(1.dp, if (checked) CyberCyan else CyberBorder, RoundedCornerShape(14.dp))
-            .clickable(enabled = !disabled) { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
-        contentAlignment = Alignment.CenterStart
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgCard)
+            .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .offset(x = offsetThumb)
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(if (checked) CyberBlack else CyberTextColorSecondary)
+        Icon(leadingIcon, contentDescription = null, tint = Cyan, modifier = Modifier.size(16.dp))
+        if (prefix != null) {
+            Text(prefix, color = Cyan, fontSize = 11.sp, fontFamily = MonospaceFontFamily)
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = TextStyle(
+                color = TxtPrimary,
+                fontSize = 13.sp,
+                fontFamily = if (monospace) MonospaceFontFamily else FontFamily.Default,
+                letterSpacing = if (monospace) 4.sp else 0.sp
+            ),
+            cursorBrush = SolidColor(Cyan),
+            singleLine = true,
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) Text(placeholder, color = TxtTertiary, fontSize = 13.sp)
+                    inner()
+                }
+            },
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
-val CyberTextColorSecondary = Color(0xFF9CA3AF)
+@Composable
+fun PhantmActionButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    ghost: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "buttonScale")
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (ghost) CyanDim else Cyan)
+            .then(if (ghost) Modifier.border(2.dp, CyanBorder, RoundedCornerShape(12.dp)) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = if (ghost) Cyan else Color.Black, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, color = if (ghost) Cyan else Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+    }
+}
+
+@Composable
+fun SettingRow(
+    icon: ImageVector,
+    label: String,
+    value: String? = null,
+    toggle: Boolean = false,
+    toggleOn: Boolean = false,
+    onToggle: ((Boolean) -> Unit)? = null,
+    hasArrow: Boolean = false,
+    danger: Boolean = false,
+    badge: Pair<String, Color>? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.99f else 1f, label = "rowScale")
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgCard)
+            .border(1.dp, if (danger) SemanticRed.copy(alpha = 0.15f) else Color(0x0FFFFFFF), RoundedCornerShape(16.dp))
+            .clickable(interactionSource = interactionSource, indication = null, enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = if (danger) SemanticRed else TxtTertiary, modifier = Modifier.size(16.dp))
+        Text(
+            text = label,
+            color = if (danger) SemanticRed else TxtPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        when {
+            value != null -> Text(value, color = Cyan, fontSize = 11.sp)
+            toggle -> FigmaToggle(on = toggleOn, onToggle = onToggle)
+            hasArrow -> Icon(Icons.Default.ChevronRight, contentDescription = null, tint = if (danger) SemanticRed else TxtTertiary, modifier = Modifier.size(16.dp))
+            badge != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val infiniteTransition = rememberInfiniteTransition(label = "badge")
+                val pulse by infiniteTransition.animateFloat(1f, 1.4f,
+                    infiniteRepeatable(tween(2000), RepeatMode.Reverse), label = "bp")
+                Box(Modifier.size(8.dp).graphicsLayer { scaleX = pulse; scaleY = pulse }.background(badge.second, CircleShape))
+                Text(badge.first, color = badge.second, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun SectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        color = TxtTertiary,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 2.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp)
+    )
+}
 
 @Composable
 fun PhantmToast(
@@ -589,10 +697,9 @@ fun PhantmBottomSheet(
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .background(CyberSurface)
                 .border(1.dp, CyberBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .clickable(enabled = false) {} // block Click propagation
+                .clickable(enabled = false) {}
                 .padding(24.dp)
         ) {
-            // Drag indicator handle
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
@@ -642,4 +749,3 @@ fun PhantmLogoWithText(
         modifier = modifier
     )
 }
-

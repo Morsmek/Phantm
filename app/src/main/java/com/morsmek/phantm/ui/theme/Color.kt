@@ -2,28 +2,53 @@ package com.morsmek.phantm.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Core surfaces
-val CyberBlack        = Color(0xFF000000)   // True black — primary background
-val CyberSurface      = Color(0xFF131313)   // Near-black surface
-val CyberCard         = Color(0xFF1C1C1C)   // Elevated surface
-val CyberSurfaceHigh  = Color(0xFF252525)   // Highest elevation surface
+// === Figma token mapping ===
+// --bg  = #070A0D  → deepest background (screen bg, nav bg, header bg)
+// --bg2 = #0D1117  → page container
+// --bg3 = #111820  → cards, inputs, conversation items
+// --bg4 = #16202A  → inner chips, toggle track off, deep insets
+// --c   = #00F0FF  → primary cyan accent
+// --c-dim   = rgba(0,240,255,0.12) → tinted surfaces
+// --c-border = rgba(0,240,255,0.18) → cyan hairline borders
+// --txt  = #FFFFFF → primary text
+// --txt2 = #8899AA → secondary text (previews, subtitles)
+// --txt3 = #445566 → tertiary text (timestamps, labels, placeholders)
+// --red  = #FF4455 → destructive
+// --green = #00E87A → online / success
 
-// Phantm signature cyan — used sparingly, active state only
-val CyberCyan         = Color(0xFF00DBE9)   // Primary accent (from reference: #00dbe9)
-val CyberCyanDim      = Color(0xFF00F0FF)   // Bright variant for glow
-val CyberCyanDark     = Color(0xFF004F54)   // Deep cyan for backgrounds
+val BgDeep        = Color(0xFF070A0D)   // --bg
+val BgPage        = Color(0xFF0D1117)   // --bg2
+val BgCard        = Color(0xFF111820)   // --bg3
+val BgInset       = Color(0xFF16202A)   // --bg4
 
-// Text hierarchy — all very low weight
-val CyberTextPrimary    = Color(0xFFE5E2E1) // Near-white body text
-val CyberTextSecondary  = Color(0xFF849495) // Muted secondary (from reference: outline)
-val CyberTextTertiary   = Color(0xFF3B494B) // Ghost text — hints and placeholders
+val Cyan          = Color(0xFF00F0FF)   // --c
+val CyanDim       = Color(0x1F00F0FF)   // --c-dim (12%)
+val CyanBorder    = Color(0x2E00F0FF)   // --c-border (18%)
+val CyanBorderHi  = Color(0x4D00F0FF)   // 30% — active avatar border
+val CyanSubtle    = Color(0x0D00F0FF)   // 5%  — dot grid, dividers
+val CyanBg        = Color(0x1400F0FF)   // 8%  — E2EE strip, code card bg
 
-// Borders — near-invisible hairlines only
-val CyberBorder         = Color(0x0D00DBE9) // 5% cyan — hairline borders
-val CyberBorderMid      = Color(0x1A00DBE9) // 10% cyan — slightly more visible
-val CyberDotColor       = Color(0x0800DBE9) // 3% cyan — dot grid
+val TxtPrimary    = Color(0xFFFFFFFF)   // --txt
+val TxtSecondary  = Color(0xFF8899AA)   // --txt2
+val TxtTertiary   = Color(0xFF445566)   // --txt3
 
-// Semantic
-val CyberGreen  = Color(0xFF10B981)
-val CyberRed    = Color(0xFFEF4444)
-val CyberAmber  = Color(0xFFF59E0B)
+val SemanticRed   = Color(0xFFFF4455)   // --red
+val SemanticGreen = Color(0xFF00E87A)   // --green
+
+// Legacy aliases — keep these so existing code compiles unchanged
+val CyberBlack       = BgDeep
+val CyberSurface     = BgPage
+val CyberCard        = BgCard
+val CyberSurfaceHigh = BgInset
+val CyberCyan        = Cyan
+val CyberCyanDim     = CyanDim
+val CyberBorder      = CyanBorder
+val CyberBorderMid   = CyanBorderHi
+val CyberDotColor    = CyanSubtle
+val CyberTextPrimary   = TxtPrimary
+val CyberTextSecondary = TxtSecondary
+val CyberTextTertiary  = TxtTertiary
+val CyberGreen       = SemanticGreen
+val CyberRed         = SemanticRed
+val CyberCyanDark     = Color(0xFF004F54)
+val CyberAmber        = Color(0xFFF59E0B)

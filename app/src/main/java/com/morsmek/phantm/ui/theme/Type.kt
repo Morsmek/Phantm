@@ -6,63 +6,26 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Monospace for keys, IDs, codes, timestamps
 val MonospaceFontFamily = FontFamily.Monospace
 
-// Phantom type scale — ultra-thin with extreme tracking
+// Figma text sizes (px → sp 1:1 since base is 16px):
+// text-[9px]  → 9.sp
+// text-[10px] → 10.sp
+// text-[11px] → 11.sp
+// text-[12px] → 12.sp
+// text-[13px] → 13.sp
+// text-[14px] → 14.sp
+// text-[16px] → 16.sp
+// text-[28px] → 28.sp  (link code display)
+
 val Typography = Typography(
-    // Screen titles: "CHATS", "IDENTITY", "SETTINGS"
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.W100,       // Ultra-thin
-        fontSize = 24.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 8.sp               // 0.35em equivalent — extreme tracking
-    ),
-    // Section headers and card titles
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.W200,
-        fontSize = 18.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 4.sp
-    ),
-    // Contact names, message senders
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.W300,
-        fontSize = 16.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 1.sp
-    ),
-    // Body text, message content
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.W200,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.3.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.W200,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.2.sp
-    ),
-    // Nav labels, badges, timestamps
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.W300,
-        fontSize = 9.sp,
-        lineHeight = 11.sp,
-        letterSpacing = 2.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.W300,
-        fontSize = 8.sp,
-        lineHeight = 10.sp,
-        letterSpacing = 1.5.sp
-    )
+    bodyLarge  = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 13.sp),
+    bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 12.sp),
+    bodySmall  = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 11.sp),
+    labelLarge  = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.W600, fontSize = 10.sp, letterSpacing = 0.5.sp),
+    labelMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.W300, fontSize = 9.sp,  letterSpacing = 0.5.sp),
+    labelSmall  = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.W300, fontSize = 9.sp),
+    titleLarge  = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 16.sp),
+    titleMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+    titleSmall  = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 13.sp),
 )
